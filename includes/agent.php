@@ -3,7 +3,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-/** Configure an exact trusted Control origin in wp-config.php. Never accept it from a request. */
+/** The staging origin is the default; a trusted wp-config.php override supports local development. */
 function agent_control_origin( $value, $local ) {
 	if ( ! is_string( $value ) ) { return false; }
 	if ( $local && 'http://127.0.0.1:8787' === $value ) { return $value; }
@@ -16,7 +16,7 @@ function agent_control_origin( $value, $local ) {
 }
 
 function agent_url() {
-	return defined( 'SUNRISE_CONTROL_URL' ) ? agent_control_origin( SUNRISE_CONTROL_URL, 'local' === wp_get_environment_type() ) : false;
+	return agent_control_origin( defined( 'SUNRISE_CONTROL_URL' ) ? SUNRISE_CONTROL_URL : 'https://sunrise-staging.elod.in', 'local' === wp_get_environment_type() );
 }
 
 /** Navigation hints only; the Control origin separately authenticates and authorizes the human. */

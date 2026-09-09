@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -11,9 +11,7 @@ Private WordPress update inventory, policies, remote jobs, and an optional WordP
 == Installation ==
 
 Upload sunrise.zip through Plugins > Add New > Upload Plugin, then activate Sunrise.
-For the hosted staging pilot, add this line to wp-config.php before the stop-editing comment:
-
-define( 'SUNRISE_CONTROL_URL', 'https://sunrise-staging.elod.in' );
+Sunrise connects to https://sunrise-staging.elod.in by default. No wp-config.php change is needed.
 
 Open Sunrise as the administrator who will own the connection, choose Connect this site,
 and approve the connection in Sunrise Control. Return to WordPress to finish and sync.
@@ -27,6 +25,9 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.2.1 =
+* Use Sunrise staging as the default Control service; no configuration is required to connect.
 
 = 0.2.0 =
 * Add GitHub release updates using the bundled Plugin Update Checker library.

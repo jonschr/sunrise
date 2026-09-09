@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.1 — 2026-09-09
+
+- Default new connections to `https://sunrise-staging.elod.in`, so the testing plugin works immediately after installation.
+- Keep the optional `SUNRISE_CONTROL_URL` override for local development and preserve existing connection origin checks.
+
 ## 0.2.0 — 2026-09-09
 
 ### Added
