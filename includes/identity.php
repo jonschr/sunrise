@@ -93,12 +93,14 @@ function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 		return new \WP_Error( 'sunrise_identity_confirmation', 'Confirm whether this is a clone or the existing site.', array( 'status' => 400 ) );
 	}
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	$locks = array();
+	$locks = array(); $execution = null;
 	try {
 		foreach ( array( 'sunrise_agent', 'sunrise_worker', 'sunrise_queue', 'sunrise_policy' ) as $lock ) {
 			if ( ! \WP_Upgrader::create_lock( $lock ) ) { return new \WP_Error( 'sunrise_identity_busy', 'Sunrise work is running. Wait before changing installation identity.', array( 'status' => 409 ) ); }
 			$locks[] = $lock;
 		}
+		require_once __DIR__ . '/agent-jobs.php';
+		$execution = agent_execution_lock(); if ( is_wp_error( $execution ) ) { return $execution; }
 		wp_cache_delete( 'sunrise_installation', 'options' );
 		$identity = installation_identity();
 		$anchor = installation_anchor();
@@ -113,7 +115,7 @@ function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 		wp_unschedule_hook( 'sunrise_check_in' );
 		foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) { wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) ); }
 		global $wpdb;
-		$names = array( 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_policy', 'sunrise_last_refresh' );
+		$names = array( 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_remote_job_fence' );
 		foreach ( array( 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_last_job_', 'sunrise_job_' ) as $prefix ) {
 			$found = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) );
 			if ( $wpdb->last_error ) { throw new \RuntimeException( 'Could not enumerate local state' ); }
@@ -130,6 +132,7 @@ function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 	} catch ( \Throwable $error ) {
 		return new \WP_Error( 'sunrise_identity_storage', 'Identity recovery did not finish. Sunrise remains paused; retry after checking database access.', array( 'status' => 500 ) );
 	} finally {
+		if ( is_resource( $execution ) ) { flock( $execution, LOCK_UN ); fclose( $execution ); }
 		foreach ( array_reverse( $locks ) as $lock ) { \WP_Upgrader::release_lock( $lock ); }
 	}
 }

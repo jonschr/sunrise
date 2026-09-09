@@ -180,6 +180,15 @@ function agent_inventory() {
 			if ( null === $identity ) { unset( $items[ count( $items ) - 1 ]['identity'] ); }
 		}
 	}
+	// Negotiate the extension before sending it; older Control deployments reject unknown report fields.
+	if ( ! empty( agent_state()['update_jobs'] ) ) {
+		$items[0]['offered_version'] = isset( $data['core']['updates'][0]['version'] ) ? $data['core']['updates'][0]['version'] : null;
+		$index = 1;
+		foreach ( array( 'plugins', 'themes' ) as $type ) {
+			foreach ( $data[ $type ] as $item ) { $items[ $index++ ]['offered_version'] = true === $item['update_available'] && isset( $item['update']['version'] ) ? $item['update']['version'] : null; }
+		}
+		foreach ( $items as &$item ) { if ( ! is_string( $item['offered_version'] ) || ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $item['offered_version'] ) ) { $item['offered_version'] = null; } } unset( $item );
+	}
 	return $items;
 }
 
@@ -304,10 +313,11 @@ function agent_check_in() {
 		$state['applied'] = $applied;
 		$state['sequence'] = $response['receipt_sequence'];
 		$state['last_success'] = time();
+		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
-		return array( 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ) );
+		return array( 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );
 		\WP_Upgrader::release_lock( 'sunrise_agent' );
@@ -323,6 +333,7 @@ function agent_disconnect() {
 function agent_disconnect_locked() {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	$state = agent_state();
+	if ( ! empty( $state['remote_job'] ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending installation before disconnecting.' ); }
 	if ( $state && ! empty( $state['site_id'] ) ) {
 		$result = agent_http( 'agent/enrollment', array(), $state, 'DELETE' );
 		if ( is_wp_error( $result ) ) {
@@ -348,6 +359,12 @@ function agent_synchronize() {
 	$generation = isset( $state['applied']['generation'] ) ? $state['applied']['generation'] : 0;
 	$result = agent_check_in();
 	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) ) ) { $result = agent_check_in(); }
+	if ( ! is_wp_error( $result ) && ( ! empty( $result['work_available'] ) || ! empty( agent_state()['remote_job'] ) ) ) {
+		require_once __DIR__ . '/agent-jobs.php';
+		$job = agent_run_update_job();
+		if ( is_wp_error( $job ) ) { return $job; }
+		if ( $job ) { $result = agent_check_in(); }
+	}
 	return $result;
 }
 

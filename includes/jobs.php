@@ -7,8 +7,9 @@ function job_error( $code, $message, $status = 409 ) {
 	return new \WP_Error( 'sunrise_' . $code, $message, array( 'status' => $status ) );
 }
 
-function job_permission( $task ) {
+function job_permission( $task, $remote = false ) {
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
+	if ( ! $remote && 'refresh' !== $task['action'] && get_option( 'sunrise_remote_job_fence' ) ) { return job_error( 'execution_interrupted', 'A central installation must finish or be reconciled before further updates.' ); }
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return job_error( 'forbidden', __( 'The requesting user no longer has permission.', 'sunrise' ), 403 );
 	}

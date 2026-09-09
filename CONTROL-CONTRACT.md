@@ -146,8 +146,9 @@ All human routes require a central human session. Prefix below: `N = /v1/account
 | POST `/v1/enrollments/{e}/approve` | Human `sites.manage` at selected network plus approval token/phrase |
 | POST `/v1/enrollments/{e}/exchange` | Matching enrollment secret; returns pending/assigned/expired |
 | POST `/v1/agent/check-in` | Site credential; own reports only, receives own policy/work hints |
-| POST `/v1/agent/jobs/claim` | Site credential; atomically reserve next eligible own job, or HTTP 204 |
+| POST `/v1/agent/jobs/claim` | Site credential and persisted random execution token; reserve eligible own job, or `{job:null}` with HTTP 200 |
 | POST `/v1/agent/jobs/{j}/start` | Own reserved job, execution token, expected state version; fresh server authorization |
+| POST `/v1/agent/jobs/{j}/status` | Own job plus execution token; bounded status for recovery |
 | POST `/v1/agent/jobs/{j}/events` | Own job, execution token and event sequence; progress/result, never arbitrary state writes |
 | DELETE `/v1/agent/enrollment` | Self-disconnect |
 
@@ -183,9 +184,9 @@ Acknowledgment status is `applied` or `rejected`; rejection leaves the preceding
 
 ## 7. Jobs and failure semantics
 
-Initial actions: `refresh_inventory`, `run_auto_updates`, and `install_update`. The last requires type, installed ID, and exact offered version; no download URL, shell command, PHP, SQL, or arbitrary cron hook is accepted. Job creation checks current operator permission and site state; execution also checks current permissions of that original actor, enrollment generation, local user capabilities, restrictions, and current update offer. `run_auto_updates` uses the latest applied policy and refuses to start while a newer resolved policy remains unapplied. Do not preserve an old broad enabling decision as a queued command.
+Planned actions: `refresh_inventory`, `run_auto_updates`, and `install_update`. The current extension implements only `install_update`; refresh has the separate coalesced endpoint above, and `run_auto_updates` is rejected until its policy/start semantics are implemented. The last requires type, installed ID, and exact offered version; no download URL, shell command, PHP, SQL, or arbitrary cron hook is accepted. Job creation checks current operator permission and site state; execution also checks current permissions of that original actor, enrollment generation, local user capabilities, restrictions, and current update offer. `run_auto_updates` uses the latest applied policy and refuses to start while a newer resolved policy remains unapplied. Do not preserve an old broad enabling decision as a queued command.
 
-Valid initial job bodies are `{"action":"refresh_inventory"}`, `{"action":"run_auto_updates"}`, or `{"action":"install_update","type":"plugin","installed_id":"example/example.php","version":"2.1.0"}`. Type is `plugin|theme|core`; core uses installed ID `wordpress`. Unknown fields are rejected, and item/version fields are only accepted for install_update. The server supplies job IDs, enqueue time, and an initial 24-hour start deadline; a later intentional operation needs a new idempotency key. Claim reservations last 60 seconds and return a random execution token and state version. The start response gives a 60-second start-authorization window; once started, expiry never implies permission to rerun.
+Valid initial job bodies are `{"action":"refresh_inventory"}`, `{"action":"run_auto_updates"}`, or `{"action":"install_update","type":"plugin","installed_id":"example/example.php","version":"2.1.0"}`. Type is `plugin|theme|core`; core uses installed ID `wordpress`. Unknown fields are rejected, and item/version fields are only accepted for install_update. The server supplies job IDs, enqueue time, and an initial 24-hour start deadline; a later intentional operation needs a new idempotency key. Claim reservations last 60 seconds and return the job and state version. The implemented agent generates and persists a random 256-bit execution token before claiming; the server stores only its digest. A repeated claim with that token retrieves the same reservation, avoiding token loss after an uncertain HTTP response. The start response gives a 60-second start-authorization window; once started, expiry never implies permission to rerun.
 
 Idempotency key uniqueness is `(account, network, site, actor, key)` with a canonical request hash. Same key/body returns the same job; different body conflicts. Record job/audit/outbox in one transaction. A bulk operation later becomes explicit per-site jobs, never an implicit all-sites target that changes during execution.
 
@@ -214,3 +215,12 @@ Before claiming the next milestone complete, integration tests must exercise: tw
 Remove the unactivated peer-directory/custom-signature prototype before connecting the central service. Disable legacy saved peer credentials in managed mode; require explicit re-enrollment rather than silently importing them. Preserve the tested native WordPress inventory, policy filters, and updater execution, but replace peer authorization and last-20 job deduplication. Existing local credentials are not the production network security model. No remote database or hosted service is provisioned by this specification.
 
 References: [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html), [WordPress auto-update controls](https://developer.wordpress.org/reference/functions/wp_is_auto_update_enabled_for_type/), [Cloudflare delivery guarantees](https://developers.cloudflare.com/queues/reference/delivery-guarantees/).
+
+
+### Implemented installation milestone
+
+The first central executor accepts exact-version installation only and limits each connection to one outstanding job. Human inventory/history reads are paged. Creation snapshots the reported installed version and identity; start rechecks the original human and enrollment. Claim/start/result and conditional cancellation/reconciliation are implemented with PostgreSQL transactions, RLS and audit records. No separate queue service is required for this outbound-only path.
+
+A local durable execution fence and process-held file lock protect multiple connections to the same WordPress installation. Interrupted workers report uncertainty with stopped-worker evidence; a human may then close the operation unverified. Timed WordPress locks alone cannot establish stopped-worker evidence. Native automatic updates and other Sunrise installation jobs remain paused while the fence is present. Identity recovery takes the same process lock; generic transfers must exclude this installation-local lock and Sunrise state. Manual WordPress/host updates are outside Sunrise's locks.
+
+The implementation returns agent job responses as `{job}`, and result events use `{execution_token,sequence,status,code,worker_stopped:true}`. Only final/uncertain outcomes are supported; progress heartbeats, automatic success/failure reconciliation, bulk runs, retention and installation UI are deferred. Actual end-to-end central installation is verified with a synthetic plugin; core/theme replacement and provider-host certification remain outstanding.

@@ -20,6 +20,7 @@ function agent_effective_policy() {
 	$states = agent_states();
 	if ( ! $states ) { return null; }
 	$off = array( 'policy' => array( 'site' => 'off', 'core' => 'off', 'plugins' => array(), 'themes' => array() ), 'identities' => array() );
+	if ( get_option( 'sunrise_remote_job_fence' ) ) { return $off; }
 	$documents = array();
 	foreach ( $states as $state ) {
 		if ( ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { continue; }
