@@ -309,6 +309,24 @@ function agent_refresh_inventory( $request, &$state ) {
 	}
 }
 
+/** Small local thumbnail, sent only when changed; Control never needs to fetch a site's favicon. */
+function agent_site_profile() {
+	$profile = array( 'name' => wp_html_excerpt( html_entity_decode( sanitize_text_field( get_bloginfo( 'name' ) ), ENT_QUOTES, 'UTF-8' ), 200, '' ), 'icon' => null );
+	$id = (int) get_option( 'site_icon' );
+	$original = $id ? get_attached_file( $id ) : false;
+	$size = $id ? image_get_intermediate_size( $id, array( 32, 32 ) ) : false;
+	$file = $original ? realpath( $size ? dirname( $original ) . '/' . basename( $size['file'] ) : $original ) : false;
+	$uploads = wp_get_upload_dir(); $base = realpath( $uploads['basedir'] );
+	if ( $file && $base && 0 === strpos( $file, $base . DIRECTORY_SEPARATOR ) && is_readable( $file ) && filesize( $file ) <= 16384 ) {
+		$image = wp_getimagesize( $file );
+		if ( $image && $image[0] <= 256 && $image[1] <= 256 && in_array( $image['mime'], array( 'image/png', 'image/jpeg', 'image/webp' ), true ) ) {
+			$bytes = file_get_contents( $file );
+			if ( false !== $bytes ) { $profile['icon'] = 'data:' . $image['mime'] . ';base64,' . base64_encode( $bytes ); }
+		}
+	}
+	return $profile;
+}
+
 function agent_check_in() {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'A check-in is already running.' ); }
@@ -329,6 +347,10 @@ function agent_check_in() {
 		if ( empty( $state['pending_report'] ) ) {
 			$state['pending_report'] = array( 'protocol_version' => 1, 'sequence' => $state['sequence'] + 1,
 				'inventory' => agent_inventory(), 'local_pause' => ! empty( $state['paused'] ) );
+			if ( ! empty( $state['site_profiles'] ) ) {
+				$profile = agent_site_profile();
+				if ( hash( 'sha256', wp_json_encode( $profile ) ) !== ( isset( $state['site_profile_hash'] ) ? $state['site_profile_hash'] : '' ) ) { $state['pending_report']['site_profile'] = $profile; }
+			}
 			if ( ! empty( $state['refresh_ack_pending'] ) && ! empty( $state['refresh_result'] ) ) { $state['pending_report']['refresh_ack'] = $state['refresh_result']; }
 			if ( ! empty( $state['applied'] ) ) {
 				$conflict = agent_policy_conflict( $state );
@@ -352,13 +374,15 @@ function agent_check_in() {
 		$state['sequence'] = $response['receipt_sequence'];
 		$state['last_success'] = time();
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
+		$state['site_profiles'] = isset( $response['site_profiles'] ) && true === $response['site_profiles'];
+		if ( isset( $state['pending_report']['site_profile'] ) ) { $state['site_profile_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['site_profile'] ) ); }
 		$state['errors_supported'] = isset( $response['error_reports'] ) && true === $response['error_reports'];
 		$state['transfer_previews'] = isset( $response['transfer_previews'] ) && true === $response['transfer_previews'];
 		$state['transfer_execution'] = isset( $response['transfer_execution'] ) && true === $response['transfer_execution'];
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
-		return array( 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ), 'transfer_work_available' => $state['transfer_previews'] && ! empty( $response['transfer_work_available'] ), 'transfer_execution_available' => $state['transfer_execution'] && ! empty( $response['transfer_execution_available'] ) );
+		return array( 'profile_pending' => ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ), 'transfer_work_available' => $state['transfer_previews'] && ! empty( $response['transfer_work_available'] ), 'transfer_execution_available' => $state['transfer_execution'] && ! empty( $response['transfer_execution_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );
 		\WP_Upgrader::release_lock( 'sunrise_agent' );
@@ -399,7 +423,7 @@ function agent_synchronize() {
 	$state = agent_state();
 	$generation = isset( $state['applied']['generation'] ) ? $state['applied']['generation'] : 0;
 	$result = agent_check_in();
-	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) ) ) { $result = agent_check_in(); }
+	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in(); }
 	if ( ! is_wp_error( $result ) && ( ! empty( $result['transfer_execution_available'] ) || ! empty( agent_state()['remote_transfer'] ) ) ) {
 		require_once __DIR__ . '/agent-transfer-execution.php';
 		$transfer = agent_run_transfer(); if ( is_wp_error( $transfer ) ) { return $transfer; }

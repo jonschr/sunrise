@@ -37,7 +37,8 @@ try {
  sunrise_update_assert( ! empty( $native->response['sunrise/sunrise.php']->icons['svg'] ) && false !== strpos( $native->response['sunrise/sunrise.php']->icons['svg'], '/assets/icon.svg' ), 'Sunrise mark is exposed as the plugin update icon' );
  $force_off = function () { return false; };
  add_filter( 'auto_update_plugin', $force_off, 19 );
- sunrise_update_assert( apply_filters( 'auto_update_plugin', false, $native->response['sunrise/sunrise.php'] ), 'Packaged Sunrise selects native automatic updates even when plugin policies are off' );
+ $development = is_link( WP_PLUGIN_DIR . '/sunrise' ) || file_exists( WP_PLUGIN_DIR . '/sunrise/.git' );
+ sunrise_update_assert( ! $development === apply_filters( 'auto_update_plugin', false, $native->response['sunrise/sunrise.php'] ), 'Packaged Sunrise self-updates despite disabled policies; development copies stay protected' );
  sunrise_update_assert( ! apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => 'other/other.php' ) ), 'Self-update selection does not enable other plugins' );
  $blocked = clone $native->response['sunrise/sunrise.php']; $blocked->disable_autoupdate = true;
  sunrise_update_assert( ! apply_filters( 'auto_update_plugin', true, $blocked ), 'Provider-disabled Sunrise offers remain disabled' );

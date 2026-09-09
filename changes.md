@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.4 — 2026-09-09
+
+- Report the site's name and a small local favicon thumbnail to compatible Control services. Send the profile only when changed; omit large, unsupported or unavailable icons.
+- Negotiate profile support before sending new fields, preserving older Control compatibility and exact report retries.
+- Use the existing bounded follow-up check-in to populate a newly negotiated profile without waiting for the next routine cycle.
+
 ## 0.2.3 — 2026-09-09
 
 - Keep Sunrise itself selected for native automatic updates, independent of network plugin policies, using the existing published-release feed.
