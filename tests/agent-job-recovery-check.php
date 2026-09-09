@@ -3,13 +3,18 @@
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() || ! current_user_can( 'manage_options' ) ) { WP_CLI::error( 'Disposable local administrator required.' ); }
 require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
 require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
+$cron = get_option( 'cron' );
 $states = Sunrise\agent_states(); $state = Sunrise\agent_state(); $fence = get_option( 'sunrise_remote_job_fence', null );
 if ( empty( $state['site_id'] ) || ! empty( $state['remote_job'] ) || $fence ) { WP_CLI::error( 'Enrolled fixture with no pending installation required.' ); }
 function sunrise_recovery_assert( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $job = array( 'id' => wp_generate_uuid4(), 'status' => 'uncertain', 'revision' => 4, 'payload' => array( 'action' => 'install_update', 'type' => 'plugin', 'installed_id' => 'never-installed/fixture.php', 'version' => '2.0', 'from_version' => '1.0', 'identity' => null ) );
 $record = array( 'token' => bin2hex( random_bytes( 32 ) ), 'phase' => 'executing', 'job' => $job );
 $reports = array(); $offline = true; $closed = false;
-$transport = function ( $pre, $options, $url ) use ( &$reports, &$offline, &$closed, &$job ) {
+$transport = function ( $pre, $options, $url ) use ( &$reports, &$offline, &$closed, &$job, &$state ) {
+ if ( '/check-in' === substr( $url, -9 ) ) {
+  $request = json_decode( $options['body'], true ); $document = $state['applied']['document']; ++$document['generation']; $wire = wp_json_encode( $document );
+  return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $request['sequence'], 'policy' => array( 'generation' => $document['generation'], 'document_json' => $wire, 'hash' => hash( 'sha256', $wire ) ), 'update_jobs' => true, 'work_available' => true ) ) );
+ }
  if ( '/events' === substr( $url, -7 ) ) {
   $reports[] = $options['body'];
   if ( $offline ) { return new WP_Error( 'fixture_offline', 'Lost result response' ); }
@@ -37,7 +42,13 @@ try {
  $state['remote_job'] = $record; Sunrise\agent_store( $state ); $job['status'] = 'succeeded';
  update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'], 'result' => array( 'status' => 'succeeded', 'code' => 'updated' ) ), false );
  sunrise_recovery_assert( true === Sunrise\agent_run_update_job() && 'succeeded' === json_decode( end( $reports ), true )['status'] && ! get_option( 'sunrise_remote_job_fence' ), 'An outcome retained while a concurrent report held the connection lock is acknowledged without reinstalling' );
+ $state['remote_job'] = $record; Sunrise\agent_store( $state );
+ update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'], 'result' => array( 'status' => 'succeeded', 'code' => 'updated' ) ), false );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); Sunrise\agent_schedule( 12 * HOUR_IN_SECONDS );
+ $synced = Sunrise\agent_synchronize(); $next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
+ sunrise_recovery_assert( ! is_wp_error( $synced ) && $next >= time() + 30 && $next <= time() + 95 && empty( Sunrise\agent_state()['remote_job'] ), 'Finishing a queued job schedules remaining explicit work soon, replacing the routine twelve-hour event' );
 } finally {
+ update_option( 'cron', $cron );
  remove_filter( 'pre_http_request', $transport ); Sunrise\agent_store_states( $states );
  if ( null === $fence ) { delete_option( 'sunrise_remote_job_fence' ); } else { update_option( 'sunrise_remote_job_fence', $fence, false ); }
 }

@@ -383,7 +383,14 @@ function agent_synchronize() {
 		require_once __DIR__ . '/agent-jobs.php';
 		$job = agent_run_update_job();
 		if ( is_wp_error( $job ) ) { return $job; }
-		if ( $job ) { $result = agent_check_in(); }
+		if ( $job ) {
+			$result = agent_check_in();
+			// Continue explicitly queued work, without increasing the routine inventory cadence.
+			if ( ! is_wp_error( $result ) && ! empty( $result['work_available'] ) && empty( agent_state()['remote_job'] ) && ! get_option( 'sunrise_remote_job_fence' ) ) {
+				wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) );
+				agent_schedule( 60 );
+			}
+		}
 	}
 	if ( ! is_wp_error( $result ) ) { agent_report_errors(); }
 	if ( ! is_wp_error( $result ) && ( ! empty( $result['transfer_work_available'] ) || ! empty( agent_state()['transfer_report'] ) ) ) { require_once __DIR__ . '/agent-transfers.php'; agent_prepare_transfer(); }
