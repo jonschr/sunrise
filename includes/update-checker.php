@@ -22,3 +22,17 @@ add_filter( 'puc_vcs_update_detection_strategies-sunrise', function ( $strategie
 	return array_intersect_key( $strategies, array( 'latest_release' => true ) );
 } );
 plugin_update_checker();
+
+// Keep the connector current even when network plugin policies are off. WordPress owns installation and recovery.
+add_filter( 'auto_update_plugin', function ( $update, $item ) {
+	$file = plugin_basename( dirname( __DIR__ ) . '/sunrise.php' );
+	if ( ! isset( $item->plugin ) || $file !== $item->plugin ) {
+		return $update;
+	}
+	// A local checkout or symlink must never be replaced by a release ZIP.
+	$directory = WP_PLUGIN_DIR . '/' . dirname( $file );
+	if ( is_link( $directory ) || file_exists( $directory . '/.git' ) ) {
+		return false;
+	}
+	return empty( $item->disable_autoupdate ) && wp_is_auto_update_enabled_for_type( 'plugin' );
+}, 20, 2 );

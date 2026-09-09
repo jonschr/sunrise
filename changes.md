@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.3 — 2026-09-09
+
+- Keep Sunrise itself selected for native automatic updates, independent of network plugin policies, using the existing published-release feed.
+- Respect provider-disabled offers and host restrictions. Preserve symlinked development installations and Git checkouts.
+- Leave other plugins' automatic-update settings unchanged. WordPress cron, filesystem checks and native upgrade recovery still apply.
+
 ## 0.2.2 — 2026-09-09
 
 - Shorten routine outbound check-ins from twelve hours to thirty minutes, plus up to thirty seconds of jitter, for the testing pilot.

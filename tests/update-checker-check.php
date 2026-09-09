@@ -35,6 +35,15 @@ try {
  $native = apply_filters( 'site_transient_update_plugins', $collision );
  sunrise_update_assert( $asset === $native->response['sunrise/sunrise.php']->package && '0.3.0' === $native->response['sunrise/sunrise.php']->new_version, 'Own update survives collision protection in the native WordPress update list' );
  sunrise_update_assert( ! empty( $native->response['sunrise/sunrise.php']->icons['svg'] ) && false !== strpos( $native->response['sunrise/sunrise.php']->icons['svg'], '/assets/icon.svg' ), 'Sunrise mark is exposed as the plugin update icon' );
+ $force_off = function () { return false; };
+ add_filter( 'auto_update_plugin', $force_off, 19 );
+ sunrise_update_assert( apply_filters( 'auto_update_plugin', false, $native->response['sunrise/sunrise.php'] ), 'Packaged Sunrise selects native automatic updates even when plugin policies are off' );
+ sunrise_update_assert( ! apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => 'other/other.php' ) ), 'Self-update selection does not enable other plugins' );
+ $blocked = clone $native->response['sunrise/sunrise.php']; $blocked->disable_autoupdate = true;
+ sunrise_update_assert( ! apply_filters( 'auto_update_plugin', true, $blocked ), 'Provider-disabled Sunrise offers remain disabled' );
+ add_filter( 'plugins_auto_update_enabled', $force_off );
+ sunrise_update_assert( ! apply_filters( 'auto_update_plugin', true, $native->response['sunrise/sunrise.php'] ), 'Host-disabled native plugin updates remain disabled' );
+ remove_filter( 'plugins_auto_update_enabled', $force_off ); remove_filter( 'auto_update_plugin', $force_off, 19 );
  $before = count( $calls ); apply_filters( 'site_transient_update_plugins', $collision );
  sunrise_update_assert( count( $calls ) === $before, 'Reading cached inventory performs no additional GitHub requests' );
  foreach ( array( 'missing_asset', 'draft', 'prerelease', 'offline' ) as $mode ) {

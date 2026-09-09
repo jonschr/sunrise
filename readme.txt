@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.2.2
+Stable tag: 0.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,7 @@ Sunrise connects to https://sunrise-staging.elod.in by default. No wp-config.php
 
 Open Sunrise as the administrator who will own the connection, choose Connect this site,
 and approve the connection in Sunrise Control. Return to WordPress to finish and sync.
-Activation preserves existing automatic-update settings. No credential is generated on activation.
+Sunrise keeps itself updated through the native WordPress automatic updater, independently of network plugin policies. Other plugins retain their existing settings. No credential is generated on activation.
 
 == Requirements ==
 
@@ -42,3 +42,5 @@ Updates come from published GitHub releases at github.com/jonschr/sunrise. Use t
 * Prepare the existing network inventory, policy, update and recovery features for SiteDistrict pilot testing.
 
 See changes.md for release notes and current testing limits.
+
+Sunrise self-updates respect host restrictions and require working WordPress cron. Development checkouts and symlinked plugin directories are never replaced automatically.

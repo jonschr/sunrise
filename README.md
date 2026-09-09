@@ -212,3 +212,8 @@ Install **sunrise.zip** from [GitHub Releases](https://github.com/jonschr/sunris
 Sunrise bundles the same Plugin Update Checker library used by legacy RentFetch, updated to upstream v5.7. It checks published releases approximately every twelve hours and provides the native Plugins-page **Check for updates** link. Only a published, non-draft, non-prerelease GitHub release with a `sunrise.zip` asset is eligible; there is no fallback to main, bare tags, or source archives. Sites need no GitHub credentials. The separate `Update URI` and early cache filter prevent the WordPress.org name collision while allowing the GitHub offer to appear.
 
 To release: update `Version` and `VERSION` in sunrise.php, `Stable tag` and the short changelog in readme.txt, and add the next numbered section to changes.md. Commit those changes, then push main and a matching `vX.Y.Z` tag. The GitHub workflow checks PHP syntax, validates matching versions, packages only committed runtime files, and publishes the ZIP with that version's changes.md notes. `python3 scripts/package.py v0.2.1` builds the current installable package locally from a clean tree. Build output is ignored by git. Do not move an already published tag; increment the version for a replacement.
+
+
+### Sunrise self-updates
+
+From 0.2.3, packaged Sunrise installations select their own published GitHub releases for WordPress's native automatic updater even when the network's plugin policy is off. Other plugins are unaffected. Host restrictions, disabled offers, filesystem checks and cron availability still apply. Symlinked installations and Git checkouts are excluded to protect development work. Existing installations need the 0.2.3 update once to gain this behavior.
