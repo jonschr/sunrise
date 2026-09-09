@@ -1,0 +1,21 @@
+name: Package tagged release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check PHP syntax
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+      - name: Build installable plugin
+        run: python3 scripts/package.py "$GITHUB_REF_NAME"
+      - name: Publish release with its package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/sunrise.zip --verify-tag --title "Sunrise $GITHUB_REF_NAME" --notes-file dist/release-notes.md

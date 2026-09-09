@@ -4,12 +4,14 @@ namespace Sunrise;
 defined( 'ABSPATH' ) || exit;
 
 add_action( 'admin_menu', function () {
-	add_menu_page( 'Sunrise', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page', 'dashicons-sun', 1000000 );
+	add_menu_page( 'Sunrise', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page', 'none', 1000000 );
 	add_submenu_page( 'sunrise', 'Sunrise Network', __( 'Network', 'sunrise' ), 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
 	add_submenu_page( 'sunrise', 'Sunrise Migrations', __( 'Migrations', 'sunrise' ), 'manage_options', 'sunrise-migrations', __NAMESPACE__ . '\\migrations_page' );
 } );
 
 add_action( 'admin_enqueue_scripts', function ( $hook ) {
+	$icon = esc_url( plugins_url( '../assets/icon.svg', __FILE__ ) );
+	wp_add_inline_style( 'common', '#adminmenu #toplevel_page_sunrise .wp-menu-image:before{content:"";display:block;width:20px;height:20px;padding:0;margin:7px auto;background-color:currentColor;-webkit-mask:url("' . $icon . '") center/contain no-repeat;mask:url("' . $icon . '") center/contain no-repeat}' );
 	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		admin_load();

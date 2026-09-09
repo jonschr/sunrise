@@ -1,6 +1,9 @@
 <?php
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
+wp_clear_scheduled_hook( 'puc_cron_check_updates-sunrise' );
+delete_site_option( 'external_updates-sunrise' );
+
 if ( is_multisite() ) {
 	return;
 }

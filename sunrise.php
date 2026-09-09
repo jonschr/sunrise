@@ -2,8 +2,9 @@
 /**
  * Plugin Name: Sunrise
  * Description: Authenticated update inventory, automatic-update policies, and remote update jobs.
- * Version: 0.1.0
- * Update URI: false
+ * Version: 0.2.0
+ * Plugin URI: https://github.com/jonschr/sunrise
+ * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
  * Requires PHP: 7.4
  * Author: Elodin Design
@@ -15,21 +16,23 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
-// This private plugin has no update feed yet. Also suppress already-cached WordPress.org collisions.
+// Discard old cached WordPress.org collisions before the GitHub checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {
 	if ( is_object( $updates ) && isset( $updates->response[ plugin_basename( __FILE__ ) ] ) ) {
 		$updates = clone $updates;
 		unset( $updates->response[ plugin_basename( __FILE__ ) ] );
 	}
 	return $updates;
-} );
+}, 9 );
+
+require_once __DIR__ . '/includes/update-checker.php';
 
 // Network-wide policies and shared files need a separate multisite permission model.
 if ( is_multisite() ) {
 	add_action( 'network_admin_notices', function () {
-		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Sunrise 0.1 supports single-site WordPress only; its API and update controls are disabled on Multisite.', 'sunrise' ) . '</p></div>';
+		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Sunrise supports single-site WordPress only; its API and update controls are disabled on Multisite.', 'sunrise' ) . '</p></div>';
 	} );
 	return;
 }

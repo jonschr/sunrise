@@ -4,3 +4,4 @@
 .dev.vars*
 __pycache__/
 *.pyc
+dist/
