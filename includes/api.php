@@ -14,6 +14,17 @@ function permission( $request = null ) {
 }
 
 function register_routes() {
+	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/sync' => array( 'POST' ) ) as $path => $methods ) {
+		register_rest_route( 'sunrise/v1', '/transfers/workbench' . $path, array( 'methods' => $methods, 'callback' => function ( $request ) use ( $path ) {
+			require_once __DIR__ . '/migrations.php'; $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
+			if ( '/status' === $path ) { return migration_status(); }
+			if ( '/sync' === $path ) { return migration_sync(); }
+			if ( 'GET' === $request->get_method() ) { return migration_draft(); }
+			if ( strlen( $request->get_body() ) > 4096 ) { return new \WP_Error( 'sunrise_migration_size', 'Selection too large.', array( 'status' => 413 ) ); }
+			return save_migration_draft( $request->get_json_params() );
+		}, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
+	}
+
 	foreach ( array( 'snapshot', 'preview' ) as $operation ) {
 		register_rest_route( 'sunrise/v1', '/transfers/' . $operation, array( 'methods' => 'POST', 'callback' => function ( $request ) use ( $operation ) {
 			require_once __DIR__ . '/transfer-inventory.php';

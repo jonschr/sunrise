@@ -2,6 +2,14 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.6 — 2026-09-09
+
+- Add a WordPress migration workbench with persistent per-administrator source/destination, scope and preset selections, explicit push/pull direction and live transfer status.
+- Choose the counterpart through a signed-in Control window. Only the selected name, URL and ID return; network credentials remain outside WordPress.
+- Prepare selected native settings with exact source/destination approval in Control. Transfer-only synchronization uses the existing durable writer and recovery journal; it does not install unrelated queued updates.
+- Show content, media, plugin/theme file and table scopes as in development. Incremental/date modes are retained as preferences but cannot execute until their handlers exist.
+- Clear saved migration preferences after identity recovery or uninstall.
+
 ## 0.2.5 — 2026-09-09
 
 - Report open native WordPress automatic-update failures as distinct components, with bounded, classified reasons and no raw messages, API keys or download URLs.

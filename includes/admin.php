@@ -15,6 +15,7 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		admin_load();
+		if ( 'sunrise_page_sunrise-migrations' === $hook ) { wp_enqueue_style( 'sunrise-migrations', plugins_url( '../assets/migrations.css', __FILE__ ), array(), VERSION ); }
 		if ( agent_url() ) { return; }
 		wp_enqueue_script( 'sunrise-network', plugins_url( '../assets/network.js', __FILE__ ), array(), VERSION, true );
 		wp_localize_script( 'sunrise-network', 'sunriseNetwork', array( 'url' => rest_url( 'sunrise/v1/controller/refresh/' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'sites' => array_keys( connections() ), 'refreshing' => __( 'Refreshing site', 'sunrise' ), 'finished' => __( 'Finished. Reloading inventory…', 'sunrise' ) ) );

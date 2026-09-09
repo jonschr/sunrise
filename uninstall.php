@@ -13,6 +13,7 @@ foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) {
 }
 
 global $wpdb;
+delete_metadata( 'user', 0, 'sunrise_migration_draft', '', true );
 wp_unschedule_hook( 'sunrise_check_in' );
 foreach ( array( 'sunrise_job_', 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_error_ack_', 'sunrise_last_job_', '_transient_sunrise_notice_', '_transient_timeout_sunrise_notice_' ) as $prefix ) {
 	$names = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) );
