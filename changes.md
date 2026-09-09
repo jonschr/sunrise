@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.7 — 2026-09-09
+
+- Bring network-wide updates, failures, site details, activity and automatic-update policies into WordPress using the shared Control dashboard.
+- Keep access tied to the connected administrator and a separately approved network update permission. Other WordPress administrators still need their own connection.
+- Add direct Control administration and permission links; move local connection settings below the dashboard.
+- Keep credentials on the server and isolate the dashboard in a sandboxed service frame. Migration and account administration authority are never delegated through this dashboard.
+
 ## 0.2.6 — 2026-09-09
 
 - Add a WordPress migration workbench with persistent per-administrator source/destination, scope and preset selections, explicit push/pull direction and live transfer status.

@@ -112,9 +112,8 @@ function managed_network_page( $view ) {
 		require_once __DIR__ . '/transfer-options.php'; transfer_recovery_page();
 		return;
 	}
-	$url = agent_dashboard_url();
-	echo '<h2>' . esc_html__( 'Your network', 'sunrise' ) . '</h2><p>' . esc_html__( 'View aggregate updates, change auto-update policies, and review update jobs in Sunrise Control. Your Control sign-in is kept separate from this WordPress site.', 'sunrise' ) . '</p>';
-	if ( $url ) { echo '<p><a class="button button-primary" id="sunrise-open-control" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control', 'sunrise' ) . '</a></p>'; }
+	require_once __DIR__ . '/dashboard.php'; dashboard_page();
+	echo '<details class="sunrise-connection"><summary>' . esc_html__( 'This site’s connection settings', 'sunrise' ) . '</summary>';
 
 	echo '<h2>' . esc_html__( 'This site’s connection', 'sunrise' ) . '</h2><table class="widefat striped"><tbody>';
 	$next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
@@ -133,5 +132,5 @@ function managed_network_page( $view ) {
 	echo '<h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p>' . esc_html__( 'PHP fatal-error locations and sampled counts are enabled by default for connected sites. Up to 100 recent groups are retained for three days. Raw messages, stack traces, SQL, and request data are never collected. Reports are sent during sync; failures before Sunrise loads or hard process kills may not be captured.', 'sunrise' ) . '</p>';
 	form_start( 'local', ! error_reporting_enabled( $state ) ? 'errors_enable' : 'errors_disable' ); submit_button( ! error_reporting_enabled( $state ) ? __( 'Enable error summaries', 'sunrise' ) : __( 'Disable error summaries', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
 	echo '<details><summary>' . esc_html__( 'Disconnect this connection', 'sunrise' ) . '</summary>';
-	form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect my connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
+	form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect my connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details></details>';
 }
