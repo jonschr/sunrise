@@ -19,7 +19,7 @@ Network roles are expanded into these server-owned grants:
 | Network role | Grants |
 | --- | --- |
 | viewer | `inventory.read`, `policy.read`, `jobs.read` |
-| maintainer | viewer plus `policy.write`, `jobs.create`, `jobs.cancel`, `jobs.reconcile`, `errors.read` |
+| maintainer | viewer plus `policy.write`, `jobs.create`, `jobs.cancel`, `jobs.reconcile`, `errors.read`, `errors.resolve` |
 | administrator | maintainer plus `sites.manage`, `members.manage` |
 
 Network administrators may manage viewer/maintainer memberships; only account owners assign/remove network administrators. Revoking account membership also invalidates every network grant in that account. Authorization uses current membership, not long-lived role claims in a login token. A person can hold different roles in different networks/accounts.

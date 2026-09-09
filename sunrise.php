@@ -37,8 +37,10 @@ if ( is_multisite() ) {
 require_once __DIR__ . '/includes/identity.php';
 require_once __DIR__ . '/includes/policy.php';
 require_once __DIR__ . '/includes/agent.php';
+require_once __DIR__ . '/includes/errors.php';
 
 add_action( 'deleted_user', function ( $user_id ) {
+	delete_option( 'sunrise_error_ack_' . $user_id );
 	$connections = get_option( 'sunrise_connections_' . $user_id, array() );
 	foreach ( array_merge( array( 'local' ), array_keys( $connections ) ) as $site ) {
 		delete_option( 'sunrise_last_job_' . $user_id . '_' . $site );

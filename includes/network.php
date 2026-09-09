@@ -96,3 +96,39 @@ function network_page() {
 	}
 	echo '</tbody></table>';
 }
+
+/** Central enrollment never falls back to stored peer credentials or network-wide site tokens. */
+function managed_network_page( $view ) {
+	$state = agent_state();
+	if ( empty( $state['site_id'] ) ) {
+		if ( ! empty( $state['approval_url'] ) && ! empty( $state['phrase'] ) ) {
+			echo '<p>' . esc_html__( 'Open the approval page and compare this verification phrase:', 'sunrise' ) . ' <strong>' . esc_html( $state['phrase'] ) . '</strong></p><p><a class="button button-primary" href="' . esc_url( $state['approval_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Approve connection in Sunrise Control', 'sunrise' ) . '</a></p>';
+			form_start( 'local', 'agent_sync' ); submit_button( __( 'Finish connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
+		}
+		form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>'; return;
+	}
+	$url = agent_dashboard_url();
+	echo '<h2>' . esc_html__( 'Your network', 'sunrise' ) . '</h2><p>' . esc_html__( 'View aggregate updates, change auto-update policies, and review update jobs in Sunrise Control. Your Control sign-in is kept separate from this WordPress site.', 'sunrise' ) . '</p>';
+	if ( $url ) { echo '<p><a class="button button-primary" id="sunrise-open-control" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control', 'sunrise' ) . '</a></p>'; }
+	if ( 'migrations' === $view ) {
+		echo '<h2>' . esc_html__( 'Push / pull', 'sunrise' ) . '</h2><p>' . esc_html__( 'Transfers will start with a reviewed selection of content, media, components, or supported settings. The destination keeps its own identity and Sunrise connections. Transfer execution is not enabled yet.', 'sunrise' ) . '</p>';
+	}
+	echo '<h2>' . esc_html__( 'This site’s connection', 'sunrise' ) . '</h2><table class="widefat striped"><tbody>';
+	$next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
+	$values = array(
+		__( 'Owned by', 'sunrise' ) => wp_get_current_user()->display_name,
+		__( 'Site', 'sunrise' ) => home_url( '/' ),
+		__( 'Status', 'sunrise' ) => ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Your connection is paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ),
+		__( 'Last successful sync', 'sunrise' ) => ! empty( $state['last_success'] ) ? sprintf( __( '%s ago', 'sunrise' ), human_time_diff( $state['last_success'] ) ) : __( 'No report acknowledged yet', 'sunrise' ),
+		__( 'Next WordPress cron check-in', 'sunrise' ) => $next ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next ) : __( 'Not scheduled', 'sunrise' ),
+		__( 'Policy', 'sunrise' ) => empty( $state['applied'] ) ? __( 'Waiting for the first policy', 'sunrise' ) : ( agent_policy_conflict( $state ) ? __( 'Overridden by another local setting', 'sunrise' ) : __( 'Last received policy applied', 'sunrise' ) ),
+	);
+	foreach ( $values as $label => $value ) { echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>' . esc_html( $value ) . '</td></tr>'; }
+	echo '</tbody></table><p>' . esc_html__( 'Routine reports run approximately every twelve hours. Sleeping local sites and idle WordPress cron can delay them. Sync now to send a report and collect pending work.', 'sunrise' ) . '</p>';
+	form_start( 'local', 'agent_sync' ); submit_button( __( 'Sync with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
+	form_start( 'local', empty( $state['paused'] ) ? 'agent_pause' : 'agent_resume' ); submit_button( empty( $state['paused'] ) ? __( 'Pause automatic updates', 'sunrise' ) : __( 'Release my pause', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
+	echo '<h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p>' . esc_html__( 'Optionally capture PHP fatal-error locations and sampled counts for this connection. Raw messages, stack traces, SQL, and request data are never collected. Reports are sent during sync; failures before Sunrise loads or hard process kills may not be captured.', 'sunrise' ) . '</p>';
+	form_start( 'local', empty( $state['errors_enabled'] ) ? 'errors_enable' : 'errors_disable' ); submit_button( empty( $state['errors_enabled'] ) ? __( 'Enable error summaries', 'sunrise' ) : __( 'Disable error summaries', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
+	echo '<details><summary>' . esc_html__( 'Disconnect this connection', 'sunrise' ) . '</summary>';
+	form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect my connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
+}

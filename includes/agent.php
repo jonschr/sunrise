@@ -19,6 +19,17 @@ function agent_url() {
 	return defined( 'SUNRISE_CONTROL_URL' ) ? agent_control_origin( SUNRISE_CONTROL_URL, 'local' === wp_get_environment_type() ) : false;
 }
 
+/** Navigation hints only; the Control origin separately authenticates and authorizes the human. */
+function agent_dashboard_url() {
+	$state = agent_state();
+	if ( ! current_user_can( 'manage_options' ) || ! $state || ! agent_owner_valid( $state ) || ! agent_service_matches( $state ) || is_wp_error( installation_guard() ) ) { return false; }
+	foreach ( array( 'account_id', 'network_id', 'site_id' ) as $key ) {
+		if ( empty( $state[ $key ] ) || ! is_string( $state[ $key ] ) || ! wp_is_uuid( $state[ $key ], 4 ) ) { return false; }
+	}
+	$path = '/v1/accounts/' . $state['account_id'] . '/networks/' . $state['network_id'];
+	return add_query_arg( 'network', $path, agent_url() . ( 'http://127.0.0.1:8787' === agent_url() ? '/' : '/clerk' ) );
+}
+
 function agent_service_matches( $state ) {
 	// Existing pilot credentials belong only to the original loopback service.
 	return agent_url() && ( isset( $state['control_url'] ) ? $state['control_url'] : 'http://127.0.0.1:8787' ) === agent_url();
@@ -314,6 +325,7 @@ function agent_check_in() {
 		$state['sequence'] = $response['receipt_sequence'];
 		$state['last_success'] = time();
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
+		$state['errors_supported'] = isset( $response['error_reports'] ) && true === $response['error_reports'];
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
@@ -365,6 +377,7 @@ function agent_synchronize() {
 		if ( is_wp_error( $job ) ) { return $job; }
 		if ( $job ) { $result = agent_check_in(); }
 	}
+	if ( ! is_wp_error( $result ) ) { agent_report_errors(); }
 	return $result;
 }
 

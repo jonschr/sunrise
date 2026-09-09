@@ -33,8 +33,16 @@ try {
 	require_once WP_PLUGIN_DIR . '/sunrise/includes/admin.php';
 	ob_start(); Sunrise\admin_page(); $html = ob_get_clean();
 	sunrise_agent_assert( false !== strpos( $html, 'Connect this site' ) && false === strpos( $html, 'agent_sync' ) && false === strpos( $html, 'Open Sunrise Control' ) && false === strpos( $html, $state['site_id'] ) && false === strpos( $html, $state['phrase'] ), 'Other administrator sees only the connection page, without owner details or controls' );
+	sunrise_agent_assert( false === Sunrise\agent_dashboard_url(), 'Another administrator cannot obtain the owner network navigation hint' );
 	wp_set_current_user( $original_user );
 	sunrise_agent_assert( true === Sunrise\agent_access(), 'The enrolling administrator retains connection access' );
+	$dashboard_url = Sunrise\agent_dashboard_url();
+	sunrise_agent_assert( $dashboard_url && false !== strpos( $dashboard_url, 'network=' ) && false === strpos( $dashboard_url, $state['secret'] ) && false === strpos( $dashboard_url, $state['digest'] ), 'Dashboard link contains only a navigation hint, not site credentials' );
+	ob_start(); Sunrise\admin_page(); $managed_html = ob_get_clean();
+	sunrise_agent_assert( false !== strpos( $managed_html, 'Open Sunrise Control' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed Network page does not fall through to the legacy peer interface' );
+	ob_start(); Sunrise\migrations_page(); $migration_html = ob_get_clean();
+	sunrise_agent_assert( false !== strpos( $migration_html, 'Sunrise Migrations' ) && false === strpos( $migration_html, 'Application password' ), 'Migrations has its own administrator page with the same connection boundary' );
+
 	wp_unschedule_hook( 'sunrise_check_in' );
 	add_filter( 'pre_http_request', $reply, 10, 2 );
 	wp_set_current_user( 0 );

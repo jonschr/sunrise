@@ -5,12 +5,15 @@ defined( 'ABSPATH' ) || exit;
 
 add_action( 'admin_menu', function () {
 	add_menu_page( 'Sunrise', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page', 'dashicons-sun', 1000000 );
+	add_submenu_page( 'sunrise', 'Sunrise Network', __( 'Network', 'sunrise' ), 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
+	add_submenu_page( 'sunrise', 'Sunrise Migrations', __( 'Migrations', 'sunrise' ), 'manage_options', 'sunrise-migrations', __NAMESPACE__ . '\\migrations_page' );
 } );
 
 add_action( 'admin_enqueue_scripts', function ( $hook ) {
-	if ( 'toplevel_page_sunrise' === $hook ) {
+	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		admin_load();
+		if ( agent_url() ) { return; }
 		wp_enqueue_script( 'sunrise-network', plugins_url( '../assets/network.js', __FILE__ ), array(), VERSION, true );
 		wp_localize_script( 'sunrise-network', 'sunriseNetwork', array( 'url' => rest_url( 'sunrise/v1/controller/refresh/' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'sites' => array_keys( connections() ), 'refreshing' => __( 'Refreshing site', 'sunrise' ), 'finished' => __( 'Finished. Reloading inventory…', 'sunrise' ) ) );
 	}
@@ -69,6 +72,8 @@ add_action( 'admin_post_sunrise', function () {
 	if ( 'identity_resolve' === $action ) {
 		$result = installation_resolve( isset( $input['identity_kind'] ) ? $input['identity_kind'] : '', isset( $input['installation_id'] ) ? $input['installation_id'] : '', isset( $input['confirm_identity'] ) && '1' === $input['confirm_identity'] );
 		if ( ! is_wp_error( $result ) && agent_url() ) { $result = agent_enroll(); }
+	} elseif ( 'errors_enable' === $action || 'errors_disable' === $action ) {
+		$result = error_capture_setting( 'errors_enable' === $action );
 	} elseif ( 'agent_enroll' === $action ) {
 		$result = agent_enroll();
 	} elseif ( 'agent_disconnect' === $action ) {
@@ -138,13 +143,15 @@ function job_button( $site, $label, $task ) {
 	echo '</form>';
 }
 
-function admin_page() {
+function migrations_page() { admin_page( 'migrations' ); }
+
+function admin_page( $view = 'network' ) {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 	admin_load();
 	$site = isset( $_GET['site'] ) && is_string( $_GET['site'] ) ? sanitize_key( wp_unslash( $_GET['site'] ) ) : 'overview';
-	echo '<div class="wrap sunrise-wrap"><h1>Sunrise</h1><p>' . esc_html__( 'Updates across your network, with detailed controls for each site.', 'sunrise' ) . '</p>';
+	echo '<div class="wrap sunrise-wrap"><h1>' . esc_html( 'migrations' === $view ? __( 'Sunrise Migrations', 'sunrise' ) : __( 'Sunrise Network', 'sunrise' ) ) . '</h1>';
 	$notice = get_transient( 'sunrise_notice_' . get_current_user_id() );
 	if ( $notice ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
@@ -175,23 +182,11 @@ function admin_page() {
 	submit_button( __( 'Reconnect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
 	if ( is_wp_error( $identity_error ) ) { echo '</div>'; return; }
 	if ( agent_url() ) {
-		$agent = agent_state();
-		echo '<div class="notice notice-info"><p><a href="' . esc_url( agent_url() ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control', 'sunrise' ) . '</a></p>';
-		if ( ! empty( $agent['site_id'] ) ) {
-			echo '<p>' . esc_html__( 'This site is connected. Manage your network in Sunrise Control using your Control account.', 'sunrise' ) . '</p>';
-			form_start( 'local', 'agent_sync' ); submit_button( __( 'Sync with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-			form_start( 'local', empty( $agent['paused'] ) ? 'agent_pause' : 'agent_resume' ); submit_button( empty( $agent['paused'] ) ? __( 'Pause automatic updates', 'sunrise' ) : __( 'Release my pause', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-			form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect my connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-		} else {
-			if ( ! empty( $agent['approval_url'] ) && ! empty( $agent['phrase'] ) ) {
-				echo '<p>' . esc_html__( 'Open the approval page and compare this verification phrase:', 'sunrise' ) . ' <strong>' . esc_html( $agent['phrase'] ) . '</strong></p>';
-				echo '<p><a href="' . esc_url( $agent['approval_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Approve connection in Sunrise Control', 'sunrise' ) . '</a></p>';
-				form_start( 'local', 'agent_sync' ); submit_button( __( 'Finish connection', 'sunrise' ), 'primary', 'submit', false ); echo '</form>';
-			}
-			form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect to Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-		}
-		echo '</div>';
+		require_once __DIR__ . '/network.php';
+		managed_network_page( $view );
+		echo '</div>'; return;
 	}
+	if ( 'migrations' === $view ) { echo '<p>' . esc_html__( 'Connect this site to Sunrise Control to prepare transfers.', 'sunrise' ) . '</p></div>'; return; }
 	echo '<form method="get" action="' . esc_url( admin_url( 'admin.php' ) ) . '"><input type="hidden" name="page" value="sunrise"><label for="sunrise-site">' . esc_html__( 'View', 'sunrise' ) . ' </label><select id="sunrise-site" name="site"><option value="overview" ' . selected( $site, 'overview', false ) . '>' . esc_html__( 'Network overview', 'sunrise' ) . '</option><option value="local" ' . selected( $site, 'local', false ) . '>' . esc_html__( 'This site', 'sunrise' ) . '</option>';
 	foreach ( connections() as $id => $connection ) {
 		echo '<option value="' . esc_attr( $id ) . '" ' . selected( $site, $id, false ) . '>' . esc_html( $connection['url'] ) . '</option>';
