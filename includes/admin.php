@@ -72,6 +72,9 @@ add_action( 'admin_post_sunrise', function () {
 	if ( 'identity_resolve' === $action ) {
 		$result = installation_resolve( isset( $input['identity_kind'] ) ? $input['identity_kind'] : '', isset( $input['installation_id'] ) ? $input['installation_id'] : '', isset( $input['confirm_identity'] ) && '1' === $input['confirm_identity'] );
 		if ( ! is_wp_error( $result ) && agent_url() ) { $result = agent_enroll(); }
+	} elseif ( 'transfer_restore' === $action ) {
+		require_once __DIR__ . '/transfer-options.php';
+		$result = transfer_options_commit( isset( $input['transfer_id'] ) ? $input['transfer_id'] : null, null, isset( $input['plan_hash'] ) ? $input['plan_hash'] : null, true );
 	} elseif ( 'errors_enable' === $action || 'errors_disable' === $action ) {
 		$result = error_capture_setting( 'errors_enable' === $action );
 	} elseif ( 'agent_enroll' === $action ) {
@@ -114,7 +117,7 @@ add_action( 'admin_post_sunrise', function () {
 		$notice = __( 'Job accepted. WordPress cron will run it, or use Run queued job below.', 'sunrise' );
 	}
 	set_transient( 'sunrise_notice_' . get_current_user_id(), array( 'error' => is_wp_error( $result ), 'message' => $notice ), 60 );
-	wp_safe_redirect( add_query_arg( array( 'page' => 'sunrise', 'site' => $site ), admin_url( 'admin.php' ) ) );
+	wp_safe_redirect( add_query_arg( array( 'page' => 'transfer_restore' === $action ? 'sunrise-migrations' : 'sunrise', 'site' => $site ), admin_url( 'admin.php' ) ) );
 	exit;
 } );
 

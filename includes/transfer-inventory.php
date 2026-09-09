@@ -119,6 +119,8 @@ function transfer_option_preview( $snapshot ) {
 			$value = transfer_rewrite( $item['value'], 'text', $urls );
 			// Serialized settings are outside this native-string scope; dedicated handlers may use transfer_rewrite explicitly.
 			if ( is_serialized( $value ) || false !== strpos( $value, "\0" ) || strlen( $value ) > 8192 ) { throw new \InvalidArgumentException( 'Unsupported native setting representation.' ); }
+			require_once __DIR__ . '/transfer-options.php';
+			transfer_native_value( $item['name'], $value );
 			$old = $existing[ $item['name'] ];
 			$changes[] = array( 'name' => $item['name'], 'before' => $old['value'], 'after' => $value, 'source_fingerprint' => $item['fingerprint'], 'expected_destination_fingerprint' => $old['fingerprint'], 'action' => $old['value'] === $value ? 'unchanged' : 'replace' );
 		}

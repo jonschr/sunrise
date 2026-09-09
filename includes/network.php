@@ -114,6 +114,8 @@ function managed_network_page( $view ) {
 		echo '<h2>' . esc_html__( 'Push / pull', 'sunrise' ) . '</h2><p>' . esc_html__( 'Transfers will start with a reviewed selection of content, media, components, or supported settings. The destination keeps its own identity and Sunrise connections. Transfer execution is not enabled yet.', 'sunrise' ) . '</p>';
 		require_once __DIR__ . '/transfer-inventory.php';
 		transfer_inventory_page();
+		require_once __DIR__ . '/transfer-options.php';
+		transfer_recovery_page();
 	}
 	echo '<h2>' . esc_html__( 'This site’s connection', 'sunrise' ) . '</h2><table class="widefat striped"><tbody>';
 	$next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
