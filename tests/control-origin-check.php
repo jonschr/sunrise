@@ -1,6 +1,7 @@
 <?php
 /** Standalone: php tests/control-origin-check.php. No WordPress database or network needed. */
 define( 'ABSPATH', __DIR__ . '/' );
+define( 'MINUTE_IN_SECONDS', 60 );
 $environment = 'production';
 function wp_get_environment_type() { return $GLOBALS['environment']; }
 function wp_parse_url( $value ) { return parse_url( $value ); }

@@ -3,10 +3,15 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-/** Opt-in, location-only fatal summaries. Never install an error handler or send HTTP during shutdown. */
+/** Default-on, location-only fatal summaries. Never install an error handler or send HTTP during shutdown. */
+/** An explicit opt-out survives upgrades; unconnected installations do not collect. */
+function error_reporting_enabled( $state ) {
+	return ! empty( $state['site_id'] ) && ( ! isset( $state['errors_enabled'] ) || (bool) $state['errors_enabled'] );
+}
+
 function error_capture_enabled() {
 	foreach ( agent_states() as $state ) {
-		if ( ! empty( $state['errors_enabled'] ) && empty( $state['revoked'] ) && agent_owner_valid( $state ) && agent_service_matches( $state ) ) { return true; }
+		if ( error_reporting_enabled( $state ) && empty( $state['revoked'] ) && agent_owner_valid( $state ) && agent_service_matches( $state ) ) { return true; }
 	}
 	return false;
 }
@@ -42,13 +47,14 @@ function error_location( $file ) {
 
 function error_summaries() {
 	$groups = get_option( 'sunrise_error_groups', array() ); $valid = array();
-	foreach ( is_array( $groups ) ? array_slice( $groups, 0, 50, true ) : array() as $key => $group ) {
+	foreach ( is_array( $groups ) ? array_slice( $groups, 0, 100, true ) : array() as $key => $group ) {
 		if ( ! is_array( $group ) || count( $group ) !== 7 || ! isset( $group['id'], $group['code'], $group['file'], $group['line'], $group['count'], $group['first_at'], $group['last_at'] ) ) { continue; }
-		if ( ! is_string( $group['id'] ) || ! wp_is_uuid( $group['id'], 4 ) || ! is_string( $group['file'] ) || ! is_int( $group['last_at'] ) || ! is_int( $group['first_at'] ) || $group['first_at'] > $group['last_at'] || $group['first_at'] < time() - 7 * DAY_IN_SECONDS || $group['last_at'] > time() + 300 ) { continue; }
+		if ( ! is_string( $group['id'] ) || ! wp_is_uuid( $group['id'], 4 ) || ! is_string( $group['file'] ) || ! is_int( $group['last_at'] ) || ! is_int( $group['first_at'] ) || $group['first_at'] > $group['last_at'] || $group['first_at'] < time() - 3 * DAY_IN_SECONDS || $group['last_at'] > time() + 300 ) { continue; }
 		if ( ! in_array( $group['code'], array( 'fatal', 'parse', 'core', 'compile', 'user_fatal', 'recoverable' ), true ) || ! is_int( $group['line'] ) || $group['line'] < 0 || $group['line'] > 10000000 || ! is_int( $group['count'] ) || $group['count'] < 1 || $group['count'] > 1000000 ) { continue; }
 		if ( strlen( $group['file'] ) > 240 || ! preg_match( '#^(wordpress|plugins|themes|mu-plugins|content|outside)/[A-Za-z0-9_./-]+$#D', $group['file'] ) || false !== strpos( $group['file'], '..' ) || false !== strpos( $group['file'], '//' ) ) { continue; }
 		$valid[ $key ] = $group;
 	}
+	if ( $groups !== $valid ) { update_option( 'sunrise_error_groups', $valid, false ); }
 	return $valid;
 }
 
@@ -72,7 +78,7 @@ function capture_error_summary( $error ) {
 	if ( ! isset( $groups[ $key ] ) ) { $groups[ $key ] = array( 'id' => wp_generate_uuid4(), 'code' => $code, 'file' => $file, 'line' => $line, 'count' => 0, 'first_at' => $now ); }
 	$groups[ $key ]['count'] = min( 1000000, $groups[ $key ]['count'] + 1 ); $groups[ $key ]['last_at'] = $now;
 	uasort( $groups, function ( $a, $b ) { return $b['last_at'] <=> $a['last_at']; } );
-	update_option( 'sunrise_error_groups', array_slice( $groups, 0, 50, true ), false );
+	update_option( 'sunrise_error_groups', array_slice( $groups, 0, 100, true ), false );
 }
 
 // Native recovery (and WP-CLI's wp_die handler) may exit before later shutdown callbacks.
@@ -88,8 +94,8 @@ register_shutdown_function( function () {
 /** Separate, coalesced delivery after normal synchronization; no job or report sequence is changed. */
 function agent_report_errors() {
 	$state = agent_state();
-	if ( empty( $state['errors_enabled'] ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { return true; }
 	$groups = array_values( error_summaries() );
+	if ( ! error_reporting_enabled( $state ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { return true; }
 	if ( ! $groups ) { return true; }
 	$hash = hash( 'sha256', wp_json_encode( array( $state['site_id'], $groups ) ) );
 	$key = 'sunrise_error_ack_' . get_current_user_id();

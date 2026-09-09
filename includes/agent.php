@@ -3,6 +3,8 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
+const AGENT_INTERVAL = 30 * MINUTE_IN_SECONDS;
+
 /** The staging origin is the default; a trusted wp-config.php override supports local development. */
 function agent_control_origin( $value, $local ) {
 	if ( ! is_string( $value ) ) { return false; }
@@ -63,7 +65,7 @@ function agent_store_states( $states ) {
 	$legacy = get_option( 'sunrise_agent', array() );
 	if ( $legacy ) {
 		$next = wp_next_scheduled( 'sunrise_check_in' );
-		if ( isset( $states[ $legacy['user_id'] ] ) ) { agent_schedule( $next ? max( 30, $next - time() ) : 12 * HOUR_IN_SECONDS, $legacy['user_id'] ); }
+		if ( isset( $states[ $legacy['user_id'] ] ) ) { agent_schedule( $next ? min( AGENT_INTERVAL, max( 30, $next - time() ) ) : AGENT_INTERVAL, $legacy['user_id'] ); }
 		wp_clear_scheduled_hook( 'sunrise_check_in' );
 	}
 	delete_option( 'sunrise_agent' ); delete_option( 'sunrise_agent_pause' ); delete_option( 'sunrise_agent_revoked' );
@@ -148,6 +150,30 @@ function agent_schedule( $delay, $user_id = null ) {
 	$args = array( null === $user_id ? get_current_user_id() : (int) $user_id );
 	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) { wp_schedule_single_event( time() + max( 30, $delay ) + wp_rand( 0, 30 ), 'sunrise_check_in', $args ); }
 }
+
+/** Apply a cadence change once on upgrade; retain earlier enrollment/job continuation events. */
+function agent_migrate_schedule() {
+	if ( AGENT_INTERVAL === (int) get_option( 'sunrise_agent_interval', 0 ) ) { return; }
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return; }
+	try {
+		$states = agent_states();
+		if ( ! agent_store_states( $states ) ) { return; }
+		foreach ( $states as $user_id => $state ) {
+			if ( ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { continue; }
+			$args = array( (int) $user_id ); $next = wp_next_scheduled( 'sunrise_check_in', $args );
+			if ( $next && $next <= time() + AGENT_INTERVAL + 30 ) { continue; }
+			if ( $next && ! wp_unschedule_event( $next, 'sunrise_check_in', $args ) ) { return; }
+			agent_schedule( AGENT_INTERVAL, $user_id );
+			if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) {
+				if ( $next ) { wp_schedule_single_event( $next, 'sunrise_check_in', $args ); }
+				return;
+			}
+		}
+		update_option( 'sunrise_agent_interval', AGENT_INTERVAL, true );
+	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
+}
+add_action( 'init', __NAMESPACE__ . '\\agent_migrate_schedule' );
 
 /** Header hints only: no version, secrets or remote lookups. Read fresh before an update decision. */
 function agent_item_identity( $type, $id ) {
@@ -362,7 +388,7 @@ function agent_disconnect_locked() {
 	return array( 'disconnected' => true );
 }
 
-/** Acknowledge a newly received policy now, rather than waiting another twelve hours. */
+/** Acknowledge a newly received policy now, rather than waiting for the next routine report. */
 function agent_sync() {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	return agent_synchronize();
@@ -406,7 +432,7 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 	try {
 		wp_set_current_user( $user_id );
 		$result = agent_synchronize();
-		$delay = 12 * HOUR_IN_SECONDS;
+		$delay = AGENT_INTERVAL;
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();
 			if ( is_array( $data ) && isset( $data['retry_after'] ) ) { $delay = max( $delay, $data['retry_after'] ); }

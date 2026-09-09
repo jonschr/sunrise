@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.2 — 2026-09-09
+
+- Shorten routine outbound check-ins from twelve hours to thirty minutes, plus up to thirty seconds of jitter, for the testing pilot.
+- Reschedule existing connections on upgrade while retaining earlier pending work and honoring longer future server Retry-After delays. Reactivation restores connection scheduling.
+- Enable location-only fatal summaries by default for connected sites, preserving explicit opt-outs. Retain at most 100 local groups for three days.
+- Update the WordPress connection panel to show the new cadence. WP-Cron still requires site traffic or an external scheduler.
+
 ## 0.2.1 — 2026-09-09
 
 - Default new connections to `https://sunrise-staging.elod.in`, so the testing plugin works immediately after installation.
