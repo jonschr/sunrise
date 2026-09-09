@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.5 — 2026-09-09
+
+- Report open native WordPress automatic-update failures as distinct components, with bounded, classified reasons and no raw messages, API keys or download URLs.
+- Clear failures after successful automatic updates or a reported installed version reaches the failed target, including updates completed outside Sunrise.
+- Negotiate failure reporting and resolution checks with Control; send native failure snapshots only when changed and preserve exact retries.
+- Clear local failure reports when reconnecting a cloned/replaced installation or uninstalling Sunrise.
+
 ## 0.2.4 — 2026-09-09
 
 - Report the site's name and a small local favicon thumbnail to compatible Control services. Send the profile only when changed; omit large, unsupported or unavailable icons.

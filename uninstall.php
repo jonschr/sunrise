@@ -20,6 +20,6 @@ foreach ( array( 'sunrise_job_', 'sunrise_connections_', 'sunrise_snapshot_', 's
 		delete_option( $name );
 	}
 }
-foreach ( array( 'sunrise_agent_interval', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock' ) as $name ) {
+foreach ( array( 'sunrise_agent_interval', 'sunrise_automatic_update_failures', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock' ) as $name ) {
 	delete_option( $name );
 }
