@@ -14,6 +14,22 @@ function permission( $request = null ) {
 }
 
 function register_routes() {
+	foreach ( array( 'snapshot', 'preview' ) as $operation ) {
+		register_rest_route( 'sunrise/v1', '/transfers/' . $operation, array( 'methods' => 'POST', 'callback' => function ( $request ) use ( $operation ) {
+			require_once __DIR__ . '/transfer-inventory.php';
+			if ( strlen( $request->get_body() ) > 131072 ) { return new \WP_Error( 'sunrise_transfer_size', 'Transfer request too large.', array( 'status' => 413 ) ); }
+			$data = $request->get_json_params();
+			if ( 'preview' === $operation ) { return transfer_option_preview( $data ); }
+			if ( ! is_array( $data ) || count( $data ) !== 1 || ! isset( $data['names'] ) ) { return new \WP_Error( 'sunrise_transfer_selection', 'Supply the selected setting names.', array( 'status' => 400 ) ); }
+			return transfer_option_snapshot( $data['names'] );
+		}, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
+	}
+	register_rest_route( 'sunrise/v1', '/transfers/inventory', array( 'methods' => 'GET', 'callback' => function ( $request ) {
+		require_once __DIR__ . '/transfer-inventory.php';
+		$after = $request->get_param( 'after' );
+		if ( null !== $after && ( ! is_scalar( $after ) || ! preg_match( '/^(0|[1-9][0-9]{0,9})$/D', (string) $after ) ) ) { return new \WP_Error( 'sunrise_transfer_cursor', 'Invalid inventory cursor.', array( 'status' => 400 ) ); }
+		return transfer_inventory( $request->get_param( 'scope' ), null === $after ? 0 : (int) $after );
+	}, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	register_rest_route( 'sunrise/v1', '/agent/check-in', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_sync', 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	register_rest_route( 'sunrise/v1', '/controller/refresh/(?P<id>[a-f0-9]{16})', array( 'methods' => 'POST', 'callback' => function ( $request ) {
 		require_once __DIR__ . '/jobs.php';

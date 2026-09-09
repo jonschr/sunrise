@@ -112,6 +112,8 @@ function managed_network_page( $view ) {
 	if ( $url ) { echo '<p><a class="button button-primary" id="sunrise-open-control" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control', 'sunrise' ) . '</a></p>'; }
 	if ( 'migrations' === $view ) {
 		echo '<h2>' . esc_html__( 'Push / pull', 'sunrise' ) . '</h2><p>' . esc_html__( 'Transfers will start with a reviewed selection of content, media, components, or supported settings. The destination keeps its own identity and Sunrise connections. Transfer execution is not enabled yet.', 'sunrise' ) . '</p>';
+		require_once __DIR__ . '/transfer-inventory.php';
+		transfer_inventory_page();
 	}
 	echo '<h2>' . esc_html__( 'This site’s connection', 'sunrise' ) . '</h2><table class="widefat striped"><tbody>';
 	$next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
