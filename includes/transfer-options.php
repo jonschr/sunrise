@@ -16,10 +16,12 @@ function transfer_native_value( $name, $value ) {
 }
 
 /** Read only the current owner's recovery records; copied installation records stay inert. */
-function transfer_option_journals() {
+function transfer_option_journals( $id = null, $before = PHP_INT_MAX ) {
 	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
+	if ( ( null !== $id && ( ! is_string( $id ) || ! wp_is_uuid( $id, 4 ) ) ) || ! is_int( $before ) || $before < 1 ) { return new \WP_Error( 'sunrise_transfer_journal', 'Invalid recovery selection.' ); }
 	global $wpdb; $owner = get_current_user_id(); $identity = installation_identity();
-	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND LENGTH(option_value)<=1048576 ORDER BY option_id DESC LIMIT 50", $wpdb->esc_like( 'sunrise_transfer_backup_' . $owner . '_' ) . '%' ), ARRAY_A );
+	$pattern = $wpdb->esc_like( 'sunrise_transfer_backup_' . $owner . '_' . ( null === $id ? '' : $id ) ) . ( null === $id ? '%' : '' );
+	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT option_id,option_name,option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_id<%d AND LENGTH(option_value)<=1048576 ORDER BY option_id DESC LIMIT 10", $pattern, $before ), ARRAY_A );
 	if ( $wpdb->last_error ) { return new \WP_Error( 'sunrise_transfer_journal', 'Recovery records could not be read.' ); }
 	$journals = array();
 	foreach ( $rows as $row ) {
@@ -28,13 +30,14 @@ function transfer_option_journals() {
 		$plan = json_decode( $journal['plan_json'], true, 32 );
 		if ( ! is_array( $plan ) || ! isset( $plan['changes'] ) || ! is_array( $plan['changes'] ) || count( $plan['changes'] ) > 7 ) { continue; }
 		foreach ( $plan['changes'] as $change ) { if ( ! is_array( $change ) || ! isset( $change['name'], $change['before'], $change['after'] ) || ! is_string( $change['name'] ) || ! in_array( $change['name'], transfer_option_names(), true ) || ! is_string( $change['before'] ) || ! is_string( $change['after'] ) ) { continue 2; } }
-		$journal['changes'] = $plan['changes']; $journals[] = $journal;
+		$journal['changes'] = $plan['changes']; $journal['cursor'] = (int) $row['option_id']; $journals[] = $journal;
 	}
 	return $journals;
 }
 
 function transfer_recovery_page() {
-	$journals = transfer_option_journals();
+	$before = isset( $_GET['recovery_before'] ) && is_string( $_GET['recovery_before'] ) && ctype_digit( $_GET['recovery_before'] ) ? (int) $_GET['recovery_before'] : PHP_INT_MAX;
+	$journals = transfer_option_journals( null, $before );
 	echo '<h3>' . esc_html__( 'Restore transferred settings', 'sunrise' ) . '</h3>';
 	if ( is_wp_error( $journals ) ) { echo '<p>' . esc_html( $journals->get_error_message() ) . '</p>'; return; }
 	if ( ! $journals ) { echo '<p>' . esc_html__( 'No settings transfers have been recorded for your connection on this installation.', 'sunrise' ) . '</p>'; return; }
@@ -50,6 +53,7 @@ function transfer_recovery_page() {
 		}
 		echo '</details>';
 	}
+	if ( 10 === count( $journals ) ) { echo '<p><a class="button" href="' . esc_url( add_query_arg( array( 'page' => 'sunrise-migrations', 'recovery_before' => end( $journals )['cursor'] ), admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'Older recovery records', 'sunrise' ) . '</a></p>'; }
 }
 
 /** Separate native connection: no nested application transaction and no wpdb automatic reconnect/retry. */
@@ -68,13 +72,13 @@ function transfer_mysql() {
 }
 
 /** Internal primitive. Apply requires an executor-owned fence; restore is reachable only through an owner's nonce-protected action. */
-function transfer_options_commit( $id, $plan_json, $plan_hash, $restore = false ) {
+function transfer_options_commit( $id, $plan_json, $plan_hash, $restore = false, $held_file = null ) {
 	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
 	if ( ! is_string( $id ) || ! wp_is_uuid( $id, 4 ) ) { return new \WP_Error( 'sunrise_transfer_invalid', 'Invalid transfer identifier.' ); }
 	require_once __DIR__ . '/agent-jobs.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_worker' ) ) { return new \WP_Error( 'sunrise_transfer_busy', 'A Sunrise worker is running.' ); }
-	$file = agent_execution_lock(); if ( is_wp_error( $file ) ) { \WP_Upgrader::release_lock( 'sunrise_worker' ); return $file; }
+	$file = is_resource( $held_file ) ? $held_file : agent_execution_lock(); if ( is_wp_error( $file ) ) { \WP_Upgrader::release_lock( 'sunrise_worker' ); return $file; }
 	$conn = null; $committing = false; $names = array();
 	$automatic = false;
 	try {
@@ -155,7 +159,7 @@ function transfer_options_commit( $id, $plan_json, $plan_hash, $restore = false 
 	} finally {
 		if ( $conn ) { try { $conn->close(); } catch ( \Throwable $ignored ) {} }
 		if ( $automatic ) { \WP_Upgrader::release_lock( 'auto_updater' ); }
-		flock( $file, LOCK_UN ); fclose( $file );
+		if ( ! is_resource( $held_file ) ) { flock( $file, LOCK_UN ); fclose( $file ); }
 		\WP_Upgrader::release_lock( 'sunrise_worker' );
 	}
 }

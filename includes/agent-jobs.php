@@ -64,6 +64,7 @@ function agent_run_update_job() {
 		$state = agent_state();
 		if ( empty( $state['site_id'] ) || ! agent_owner_valid( $state ) || is_wp_error( installation_guard() ) ) { return job_error( 'forbidden', 'Reconnect this installation before running jobs.' ); }
 		$fence = get_option( 'sunrise_remote_job_fence', array() );
+		if ( $fence && isset( $fence['kind'] ) && 'transfer' === $fence['kind'] ) { return job_error( 'busy', 'A transfer needs to finish or be reviewed before updates can run.' ); }
 		if ( $fence && $fence['site_id'] !== $state['site_id'] ) { return job_error( 'busy', 'Another connection has an installation awaiting recovery.' ); }
 		$record = isset( $state['remote_job'] ) ? $state['remote_job'] : null;
 		if ( $fence && ! $record ) { return job_error( 'execution_interrupted', 'Execution state is missing; inspect this installation before reconnecting.' ); }

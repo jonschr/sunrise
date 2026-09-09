@@ -111,7 +111,7 @@ function managed_network_page( $view ) {
 	echo '<h2>' . esc_html__( 'Your network', 'sunrise' ) . '</h2><p>' . esc_html__( 'View aggregate updates, change auto-update policies, and review update jobs in Sunrise Control. Your Control sign-in is kept separate from this WordPress site.', 'sunrise' ) . '</p>';
 	if ( $url ) { echo '<p><a class="button button-primary" id="sunrise-open-control" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control', 'sunrise' ) . '</a></p>'; }
 	if ( 'migrations' === $view ) {
-		echo '<h2>' . esc_html__( 'Push / pull', 'sunrise' ) . '</h2><p>' . esc_html__( 'Transfers will start with a reviewed selection of content, media, components, or supported settings. The destination keeps its own identity and Sunrise connections. Transfer execution is not enabled yet.', 'sunrise' ) . '</p>';
+		echo '<h2>' . esc_html__( 'Push / pull', 'sunrise' ) . '</h2><p>' . esc_html( ! empty( $state['transfer_execution'] ) ? __( 'Prepare supported native settings in Sunrise Control, review the exact changes, and approve both endpoints. Sync the destination within the 15-minute approval window to apply them. Its identity and Sunrise connections stay intact. Content, media, plugin, theme and table execution are not available yet.', 'sunrise' ) : __( 'Prepare and review supported native settings in Sunrise Control. Your connected service has not enabled transfer execution yet. The destination keeps its own identity and Sunrise connections.', 'sunrise' ) ) . '</p>';
 		require_once __DIR__ . '/transfer-inventory.php';
 		transfer_inventory_page();
 		require_once __DIR__ . '/transfer-options.php';
