@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.10 — 2026-09-09
+
+- Shorten routine check-ins to five minutes for testing, plus up to thirty seconds of jitter. Existing connections migrate to the shorter schedule on upgrade without postponing earlier queued-work events.
+- Open Control at its canonical root URL; older Control links continue to redirect.
+- Add internal database snapshot preview and private staging primitives. Full database migration remains unavailable until approved identity handoff and atomic replacement/recovery are complete.
+
 ## 0.2.9 — 2026-09-09
 
 - Fill the WordPress content area on Sunrise pages and suppress unrelated WordPress notices there. Move installation and connection controls into Site settings.

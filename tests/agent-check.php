@@ -39,7 +39,7 @@ try {
 	$dashboard_url = Sunrise\agent_dashboard_url();
 	sunrise_agent_assert( $dashboard_url && false !== strpos( $dashboard_url, 'network=' ) && false === strpos( $dashboard_url, $state['secret'] ) && false === strpos( $dashboard_url, $state['digest'] ), 'Dashboard link contains only a navigation hint, not site credentials' );
 	ob_start(); Sunrise\admin_page(); $managed_html = ob_get_clean();
-	sunrise_agent_assert( false !== strpos( $managed_html, 'Open Sunrise Control' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed Network page does not fall through to the legacy peer interface' );
+	sunrise_agent_assert( false !== strpos( $managed_html, 'id="sunrise-dashboard"' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed Network page does not fall through to the legacy peer interface' );
 	ob_start(); Sunrise\migrations_page(); $migration_html = ob_get_clean();
 	sunrise_agent_assert( false !== strpos( $migration_html, 'Sunrise Migrations' ) && false === strpos( $migration_html, 'Application password' ), 'Migrations has its own administrator page with the same connection boundary' );
 
@@ -51,7 +51,7 @@ try {
 	sunrise_agent_assert( 0 === get_current_user_id() && 2 === count( $reports ), 'Background cron sync works without a logged-in user and restores that context' );
 	wp_set_current_user( $original_user );
 	$next = wp_next_scheduled( 'sunrise_check_in', array( $original_user ) );
-	sunrise_agent_assert( $next >= $now + 30 * MINUTE_IN_SECONDS && $next <= time() + 30 * MINUTE_IN_SECONDS + 30, 'Cron schedules the next outbound report in thirty minutes with jitter' );
+	sunrise_agent_assert( $next >= $now + 5 * MINUTE_IN_SECONDS && $next <= time() + 5 * MINUTE_IN_SECONDS + 30, 'Cron schedules the next outbound report in five minutes with jitter' );
 	sunrise_agent_assert( 2 === count( $reports ) && $mock_wire['generation'] === $reports[1]['policy_ack']['generation'], 'A new policy is acknowledged immediately in the same sync' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'] ) && Sunrise\agent_site_profile() === $reports[1]['site_profile'], 'Profiles are negotiated first and delivered in the bounded follow-up' );
 	sunrise_agent_assert( ! isset( $reports[0]['automatic_update_failures'] ) && isset( $reports[1]['automatic_update_failures'] ), 'Automatic failures are negotiated before the snapshot is sent' );
@@ -78,7 +78,7 @@ try {
 	wp_unschedule_hook( 'sunrise_check_in' );
 	add_filter( 'pre_http_request', $block );
 	$now = time(); do_action( 'sunrise_check_in', $original_user );
-	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 30 * MINUTE_IN_SECONDS, 'An unreachable site retains the thirty-minute retry interval' );
+	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 5 * MINUTE_IN_SECONDS, 'An unreachable site retains the five-minute retry interval' );
 	remove_filter( 'pre_http_request', $block );
 	$throttled = function () { return array( 'response' => array( 'code' => 429 ), 'headers' => array( 'retry-after' => 3600 ), 'body' => '{"error":{"code":"rate_limited"}}' ); };
 	wp_unschedule_hook( 'sunrise_check_in' );add_filter( 'pre_http_request', $throttled );$now = time();

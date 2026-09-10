@@ -6,9 +6,9 @@ function sunrise_schedule_assert( $ok, $message ) { if ( ! $ok ) { throw new Run
 $block = function () { throw new RuntimeException( 'Scheduling must not contact any service' ); };add_filter( 'pre_http_request', $block );
 try {
  sunrise_schedule_assert( isset( $states[ $owner ] ), 'Enrolled owner fixture exists' );
- wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 12 * HOUR_IN_SECONDS, 'sunrise_check_in', array( $owner ) );delete_option( 'sunrise_agent_interval' );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 30 * MINUTE_IN_SECONDS, 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', 1800 );
  Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );
- sunrise_schedule_assert( $next >= time() + 1798 && $next <= time() + 1830, 'Existing twelve-hour event moves to thirty minutes plus jitter' );
+ sunrise_schedule_assert( $next >= time() + 298 && $next <= time() + 330, 'Existing thirty-minute event moves to five minutes plus jitter' );
  sunrise_schedule_assert( $states === Sunrise\agent_states(), 'Connection identities and credentials remain unchanged' );
  Sunrise\agent_migrate_schedule();sunrise_schedule_assert( $next === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Repeated requests do not postpone check-in' );
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 60, 'sunrise_check_in', array( $owner ) );$soon = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );delete_option( 'sunrise_agent_interval' );Sunrise\agent_migrate_schedule();

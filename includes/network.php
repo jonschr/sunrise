@@ -127,7 +127,7 @@ function managed_network_page( $view ) {
 		__( 'Policy', 'sunrise' ) => empty( $state['applied'] ) ? __( 'Waiting for the first policy', 'sunrise' ) : ( agent_policy_conflict( $state ) ? __( 'Overridden by another local setting', 'sunrise' ) : __( 'Last received policy applied', 'sunrise' ) ),
 	);
 	foreach ( $values as $label => $value ) { echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>' . esc_html( $value ) . '</td></tr>'; }
-	echo '</tbody></table><p>' . esc_html__( 'Routine reports run approximately every thirty minutes. Sleeping local sites and idle WordPress cron can delay them. Sync now to send a report and collect pending work.', 'sunrise' ) . '</p>';
+	echo '</tbody></table><p>' . esc_html__( 'Routine reports run approximately every five minutes. Sleeping local sites and idle WordPress cron can delay them. Sync now to send a report and collect pending work.', 'sunrise' ) . '</p>';
 	form_start( 'local', 'agent_sync' ); submit_button( __( 'Sync with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
 	form_start( 'local', empty( $state['paused'] ) ? 'agent_pause' : 'agent_resume' ); submit_button( empty( $state['paused'] ) ? __( 'Pause automatic updates', 'sunrise' ) : __( 'Release my pause', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
 	echo '<h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p>' . esc_html__( 'PHP fatal-error locations and sampled counts are enabled by default for connected sites. Up to 100 recent groups are retained for three days. Raw messages, stack traces, SQL, and request data are never collected. Reports are sent during sync; failures before Sunrise loads or hard process kills may not be captured.', 'sunrise' ) . '</p>';

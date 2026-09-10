@@ -3,7 +3,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const AGENT_INTERVAL = 30 * MINUTE_IN_SECONDS;
+const AGENT_INTERVAL = 5 * MINUTE_IN_SECONDS;
 
 /** The staging origin is the default; a trusted wp-config.php override supports local development. */
 function agent_control_origin( $value, $local ) {
