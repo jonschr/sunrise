@@ -137,7 +137,7 @@ function transfer_file_prune( $root, $current ) {
 			if ( ! is_array( $value ) || ! in_array( $value['state'] ?? '', array( 'committed', 'restored' ), true ) ) { continue; }
 		}
 		$files = iterator_to_array( new \FilesystemIterator( $dir ) ); $safe = true;
-		foreach ( $files as $file ) { if ( $file->isLink() || ! $file->isFile() || ! preg_match( '/^(?:[0-9]+\.(?:part|backup)|(?:source|incoming)\.zip|(?:manifest|journal|progress)\.json(?:\.tmp)?)$/D', $file->getFilename() ) || $file->getMTime() >= time() - 7 * DAY_IN_SECONDS ) { $safe = false; break; } }
+		foreach ( $files as $file ) { if ( $file->isLink() || ! $file->isFile() || ! preg_match( '/^(?:[0-9]+\.(?:part|backup)|(?:source|incoming)\.zip|(?:manifest|journal|progress)\.json(?:\.tmp)?|database-[A-Za-z0-9_]{1,64}\.jsonl)$/D', $file->getFilename() ) || $file->getMTime() >= time() - 7 * DAY_IN_SECONDS ) { $safe = false; break; } }
 		if ( $safe ) { foreach ( $files as $file ) { unlink( $file->getPathname() ); } rmdir( $dir ); }
 	}
 }
