@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.18 — 2026-09-10
+
+- Keep migration selection, preparation, exact-plan review, approval, cancellation, progress, and recovery in the WordPress administrator. Local sites use the same workflow without opening the hosted app.
+- Use the existing scoped network delegation to create and approve immutable transfers. Control remains the coordinator and private file relay; a raw site credential still cannot authorize migration work.
+
 ## 0.2.17 — 2026-09-10
 
 - Send remote requests to the plugin's `/wp-json/sunrise/v1/...` route first and fall back to WordPress's root `?rest_route=...` form only for non-pretty permalinks. Stop posting directly to `/index.php`.

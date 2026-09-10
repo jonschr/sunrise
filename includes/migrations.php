@@ -30,6 +30,44 @@ function save_migration_draft( $data ) {
 	return $data;
 }
 
+function migration_control_request( $method, $suffix = '', $data = null, $headers = array() ) {
+	$state = agent_state(); $payload = array( 'path' => '/v1/accounts/' . $state['account_id'] . '/networks/' . $state['network_id'] . '/transfers' . $suffix, 'method' => $method );
+	if ( null !== $data ) { $payload['data'] = $data; }
+	if ( $headers ) { $payload['headers'] = $headers; }
+	$response = agent_http( 'agent/dashboard', $payload, $state ); if ( is_wp_error( $response ) ) { return $response; }
+	if ( ! isset( $response['status'], $response['body'] ) || ! is_int( $response['status'] ) || ! is_array( $response['body'] ) ) { return new \WP_Error( 'sunrise_migration_control', 'Sunrise Control returned an invalid migration response.', array( 'status' => 502 ) ); }
+	if ( $response['status'] < 200 || $response['status'] >= 300 ) { $code = $response['body']['error']['code'] ?? 'migration_request_failed'; return new \WP_Error( 'sunrise_migration_control', 'Sunrise Control rejected the migration request: ' . sanitize_key( $code ) . '.', array( 'status' => $response['status'] ) ); }
+	return $response['body'];
+}
+
+function migration_prepare( $data ) {
+	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
+	if ( ! is_array( $data ) || count( $data ) !== 2 || ! isset( $data['keys'], $data['draft'] ) || ! is_array( $data['keys'] ) ) { return new \WP_Error( 'sunrise_migration_selection', 'Invalid migration request.', array( 'status' => 400 ) ); }
+	$draft = save_migration_draft( $data['draft'] ); if ( is_wp_error( $draft ) ) { return $draft; } $supported = array( 'options', 'plugins', 'themes', 'media', 'tables' );
+	if ( ! $draft['peer'] || array_diff( $draft['scopes'], $supported ) || ( in_array( 'tables', $draft['scopes'], true ) && array( 'tables' ) !== $draft['scopes'] ) || ( in_array( 'options', $draft['scopes'], true ) && ( 'all' !== $draft['since'] || ! $draft['names'] ) ) ) { return new \WP_Error( 'sunrise_migration_selection', 'Choose a supported migration and connected site.', array( 'status' => 400 ) ); }
+	$current = agent_state()['site_id']; $source = 'push' === $draft['direction'] ? $current : $draft['peer']['id']; $destination = 'push' === $draft['direction'] ? $draft['peer']['id'] : $current; $requests = array();
+	if ( in_array( 'options', $draft['scopes'], true ) ) { $requests[] = array( 'source_site_id' => $source, 'destination_site_id' => $destination, 'names' => $draft['names'] ); }
+	$file_scopes = array_intersect( $draft['scopes'], array( 'plugins', 'themes', 'media' ) ); if ( $file_scopes ) { $requests[] = array( 'source_site_id' => $source, 'destination_site_id' => $destination, 'file_selection' => array_intersect_key( $draft['file_selection'], array_flip( $file_scopes ) ) ); }
+	if ( in_array( 'tables', $draft['scopes'], true ) ) { $requests[] = array( 'source_site_id' => $source, 'destination_site_id' => $destination, 'names' => array( 'database' ) ); }
+	if ( ! $requests || count( $data['keys'] ) !== count( $requests ) ) { return new \WP_Error( 'sunrise_migration_selection', 'Migration request keys do not match the selected work.', array( 'status' => 400 ) ); }
+	foreach ( $requests as $index => $request ) {
+		$key = $data['keys'][ $index ] ?? null; if ( ! is_string( $key ) || ! wp_is_uuid( $key, 4 ) ) { return new \WP_Error( 'sunrise_migration_key', 'Invalid migration request key.', array( 'status' => 400 ) ); }
+		$result = migration_control_request( 'POST', '', $request, array( 'Idempotency-Key' => $key ) ); if ( is_wp_error( $result ) ) { return $result; }
+	}
+	return migration_status();
+}
+
+function migration_action( $action, $data ) {
+	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
+	if ( ! in_array( $action, array( 'approve', 'cancel' ), true ) || ! is_array( $data ) || ! isset( $data['id'], $data['revision'] ) || ! is_string( $data['id'] ) || ! wp_is_uuid( $data['id'], 4 ) || ! is_int( $data['revision'] ) || $data['revision'] < 0 ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration action.', array( 'status' => 400 ) ); }
+	if ( 'approve' === $action ) {
+		if ( count( $data ) !== 4 || ! isset( $data['side'], $data['plan_hash'] ) || ! in_array( $data['side'], array( 'source', 'destination' ), true ) || ! is_string( $data['plan_hash'] ) || ! preg_match( '/^[a-f0-9]{64}$/D', $data['plan_hash'] ) ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration approval.', array( 'status' => 400 ) ); }
+		$body = array( 'side' => $data['side'], 'revision' => $data['revision'], 'plan_hash' => $data['plan_hash'] );
+	} else { if ( count( $data ) !== 2 ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration cancellation.', array( 'status' => 400 ) ); } $body = array( 'revision' => $data['revision'] ); }
+	$result = migration_control_request( 'POST', '/' . $data['id'] . '/' . $action, $body ); if ( is_wp_error( $result ) ) { return $result; }
+	return migration_status();
+}
+
 function migration_peers( $after = null ) {
 	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
 	if ( null !== $after && ( ! is_string( $after ) || ! wp_is_uuid( $after, 4 ) ) ) { return new \WP_Error( 'sunrise_peer_cursor', 'Invalid site list cursor.', array( 'status' => 400 ) ); }
@@ -80,7 +118,7 @@ function migration_workbench_page() {
 	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { echo '<p>' . esc_html( $access->get_error_message() ) . '</p>'; return; }
 	wp_enqueue_style( 'sunrise-migrations', plugins_url( '../assets/migrations.css', __FILE__ ), array(), VERSION );
 	wp_enqueue_script( 'sunrise-migrations', plugins_url( '../assets/migrations.js', __FILE__ ), array(), VERSION, true );
-	wp_localize_script( 'sunrise-migrations', 'sunriseMigrations', array( 'api' => rest_url( 'sunrise/v1/transfers/workbench' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'control' => agent_dashboard_url(), 'draft' => migration_draft(), 'site' => array( 'id' => agent_state()['site_id'], 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ) ) ) );
+	wp_localize_script( 'sunrise-migrations', 'sunriseMigrations', array( 'api' => rest_url( 'sunrise/v1/transfers/workbench' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'draft' => migration_draft(), 'site' => array( 'id' => agent_state()['site_id'], 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ) ) ) );
 	echo '<div id="sunrise-migration-workbench"><p class="migration-lead">' . esc_html__( 'Choose what moves, and where it goes.', 'sunrise' ) . '</p><div class="migration-route"><div><span class="migration-label">Source · copy from</span><strong id="migration-source"></strong><small id="migration-source-url"></small></div><button type="button" id="migration-swap" aria-label="Reverse migration direction">⇄</button><div><span class="migration-label">Destination · write to</span><strong id="migration-destination"></strong><small id="migration-destination-url"></small></div><label class="migration-peer-label">Connected site<select id="migration-peer"><option value="">Loading sites…</option></select><span id="migration-peer-status" role="status"></span></label></div><p id="migration-direction" aria-live="polite"></p><div class="migration-card"><div class="migration-card-heading"><h2>What to migrate</h2><label>Preset <select id="migration-preset"><option value="settings">Site settings</option><option value="content">Content, settings &amp; media</option><option value="files">Plugins &amp; themes</option><option value="custom">Custom selection</option></select></label></div>';
 	$scopes = array( 'posts' => array( 'Posts & pages', 'Content, custom post types, metadata and relationships.' ), 'options' => array( 'Site settings', 'Site title, tagline, date, time and timezone settings.' ), 'media' => array( 'Media files', 'Original uploads and generated files; attachment records move with the database.' ), 'plugins' => array( 'Plugins', 'Selected plugin files; Sunrise stays with its destination.' ), 'themes' => array( 'Themes', 'Selected theme files, including child themes.' ), 'tables' => array( 'Database preflight', 'Inventory and validate all WordPress tables without writing to the destination.' ) );
 	foreach ( $scopes as $scope => $labels ) {
