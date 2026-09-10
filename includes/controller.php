@@ -65,8 +65,13 @@ function controller_request( $connection, $path, $method = 'GET', $body = null )
 	if ( null !== $body ) {
 		$args['body'] = $encoded_body;
 	}
-	$endpoint = add_query_arg( 'rest_route', '/sunrise/v1/' . $path, trailingslashit( $url ) . 'index.php' );
-	$response = $local ? wp_remote_request( $endpoint, $args ) : wp_safe_remote_request( $endpoint, $args );
+	$route = '/sunrise/v1/' . $path;
+	$endpoints = array( trailingslashit( $url ) . 'wp-json' . $route, add_query_arg( 'rest_route', $route, trailingslashit( $url ) ) );
+	foreach ( $endpoints as $index => $endpoint ) {
+		$response = $local ? wp_remote_request( $endpoint, $args ) : wp_safe_remote_request( $endpoint, $args );
+		if ( 0 === $index && ! is_wp_error( $response ) && 404 === wp_remote_retrieve_response_code( $response ) ) { continue; }
+		break;
+	}
 	if ( is_wp_error( $response ) ) {
 		return new \WP_Error( 'sunrise_connection_failed', __( 'Connection failed or timed out. Check the URL, TLS certificate, and firewall. A submitted job may still be running; check its status before submitting another.', 'sunrise' ) );
 	}

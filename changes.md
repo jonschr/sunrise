@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.17 — 2026-09-10
+
+- Send remote requests to the plugin's `/wp-json/sunrise/v1/...` route first and fall back to WordPress's root `?rest_route=...` form only for non-pretty permalinks. Stop posting directly to `/index.php`.
+- Let one migration selection prepare native settings and plugin/theme/media files as separate immutable plans with their existing recovery boundaries.
+- Carry the existing bounded whole-database snapshot and destination comparison through the agent protocol as a read-only preflight. It reports tables, rows, bytes, identity, and automatic URL mapping without claiming schemas match or permitting approval or writes.
+- Remove temporary database row files after Control accepts or terminally rejects the read-only manifest, including exact retry and expiry cleanup.
+
 ## 0.2.16 — 2026-09-10
 
 - Offer a one-click connection from every WordPress administration page. Open the approval in a new tab, poll only while it is pending, and send the full update inventory immediately after approval instead of waiting for routine cron.

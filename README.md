@@ -50,7 +50,7 @@ Settings are Sunrise overrides, not replacements for native per-item options. De
 
 ## REST API
 
-Namespace: `/wp-json/sunrise/v1`. The alternative `index.php?rest_route=/sunrise/v1/...` works without pretty permalinks and is used by the bundled controller.
+Namespace: `/wp-json/sunrise/v1`. The controller falls back to `/?rest_route=/sunrise/v1/...` when pretty permalinks are unavailable.
 
 All routes require an authenticated user with `manage_options`. Writes additionally require the corresponding native update capabilities. REST authentication uses WordPress application passwords over HTTPS; native cookie authentication with an `X-WP-Nonce` is also supported. GET requests do not change update state. Responses include `Cache-Control: private, no-store` and vary on authorization/cookies.
 

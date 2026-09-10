@@ -47,7 +47,7 @@ def request(path, body=None, authenticate=True):
     headers = {'User-Agent': 'SunriseController/0.1.0 (+' + args.url + '/)', 'Content-Type': 'application/json'}
     if authenticate:
         headers['Authorization'] = 'Basic ' + auth
-    url = args.url.rstrip('/') + '/index.php?' + urllib.parse.urlencode({'rest_route': '/sunrise/v1/' + path})
+    url = args.url.rstrip('/') + '/wp-json/sunrise/v1/' + path
     req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(), headers=headers)
     try:
         response = urllib.request.urlopen(req, context=context, timeout=40)
