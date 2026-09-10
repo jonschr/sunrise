@@ -14,6 +14,7 @@ function permission( $request = null ) {
 }
 
 function register_routes() {
+	register_rest_route( 'sunrise/v1', '/wake', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_wake', 'permission_callback' => __NAMESPACE__ . '\\agent_wake_permission' ) );
 	register_rest_route( 'sunrise/v1', '/dashboard', array( 'methods' => 'POST', 'callback' => function ( $request ) { require_once __DIR__ . '/dashboard.php'; return dashboard_request( $request ); }, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/catalog' => array( 'GET' ), '/peers' => array( 'GET' ), '/sync' => array( 'POST' ) ) as $path => $methods ) {
 		register_rest_route( 'sunrise/v1', '/transfers/workbench' . $path, array( 'methods' => $methods, 'callback' => function ( $request ) use ( $path ) {

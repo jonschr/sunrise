@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.11 — 2026-09-09
+
+- Add an authenticated wake-only endpoint that schedules an immediate check-in and starts WordPress cron. Requests are bound to the administrator connection, generation and URL, expire quickly, and are replay-safe and rate-limited.
+- Negotiate a separate derived wake key with Control without exposing the normal site credential. Routine five-minute polling remains the fallback.
+
 ## 0.2.10 — 2026-09-09
 
 - Shorten routine check-ins to five minutes for testing, plus up to thirty seconds of jitter. Existing connections migrate to the shorter schedule on upgrade without postponing earlier queued-work events.

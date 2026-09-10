@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Sunrise
  * Description: Authenticated update inventory, automatic-update policies, and remote update jobs.
- * Version: 0.2.10
+ * Version: 0.2.11
  * Plugin URI: https://github.com/jonschr/sunrise
  * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
@@ -16,7 +16,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.2.10';
+const VERSION = '0.2.11';
 
 // Discard old cached WordPress.org collisions before the GitHub checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {
@@ -40,6 +40,7 @@ if ( is_multisite() ) {
 require_once __DIR__ . '/includes/identity.php';
 require_once __DIR__ . '/includes/policy.php';
 require_once __DIR__ . '/includes/agent.php';
+require_once __DIR__ . '/includes/agent-wake.php';
 require_once __DIR__ . '/includes/errors.php';
 require_once __DIR__ . '/includes/update-failures.php';
 

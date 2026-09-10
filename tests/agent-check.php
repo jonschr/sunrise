@@ -19,7 +19,7 @@ $mock_wire = array( 'generation' => $mock_document['generation'], 'document_json
 $mock_wire['hash'] = hash( 'sha256', $mock_wire['document_json'] );
 $reply = function ( $pre, $args ) use ( &$reports, $mock_wire ) {
 	$report = json_decode( $args['body'], true ); $reports[] = $report;
-	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 };
 try {
 	$other_admin = wp_insert_user( array( 'user_login' => 'sunrise-owner-test-' . wp_generate_password( 12, false ), 'user_pass' => wp_generate_password( 40 ), 'role' => 'administrator' ) );
@@ -43,7 +43,7 @@ try {
 	ob_start(); Sunrise\migrations_page(); $migration_html = ob_get_clean();
 	sunrise_agent_assert( false !== strpos( $migration_html, 'Sunrise Migrations' ) && false === strpos( $migration_html, 'Application password' ), 'Migrations has its own administrator page with the same connection boundary' );
 
-	$profile_state = Sunrise\agent_state(); unset( $profile_state['site_profiles'], $profile_state['site_profile_hash'], $profile_state['update_failures'], $profile_state['update_failure_hash'] ); Sunrise\agent_store( $profile_state );
+	$profile_state = Sunrise\agent_state(); unset( $profile_state['wake_requests'], $profile_state['wake_registered'], $profile_state['site_profiles'], $profile_state['site_profile_hash'], $profile_state['update_failures'], $profile_state['update_failure_hash'] ); Sunrise\agent_store( $profile_state );
 	wp_unschedule_hook( 'sunrise_check_in' );
 	add_filter( 'pre_http_request', $reply, 10, 2 );
 	wp_set_current_user( 0 );
@@ -54,8 +54,10 @@ try {
 	sunrise_agent_assert( $next >= $now + 5 * MINUTE_IN_SECONDS && $next <= time() + 5 * MINUTE_IN_SECONDS + 30, 'Cron schedules the next outbound report in five minutes with jitter' );
 	sunrise_agent_assert( 2 === count( $reports ) && $mock_wire['generation'] === $reports[1]['policy_ack']['generation'], 'A new policy is acknowledged immediately in the same sync' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'] ) && Sunrise\agent_site_profile() === $reports[1]['site_profile'], 'Profiles are negotiated first and delivered in the bounded follow-up' );
+	sunrise_agent_assert( ! isset( $reports[0]['wake_key'] ) && Sunrise\agent_wake_key( $state ) === $reports[1]['wake_key'], 'Wake-only authentication is negotiated and registered' );
 	sunrise_agent_assert( ! isset( $reports[0]['automatic_update_failures'] ) && isset( $reports[1]['automatic_update_failures'] ), 'Automatic failures are negotiated before the snapshot is sent' );
 	$reports = array(); $result = Sunrise\agent_sync();
+	sunrise_agent_assert( Sunrise\agent_state()['wake_registered'] && ! isset( $reports[0]['wake_key'] ), 'Acknowledged wake key is omitted from routine reports' );
 	sunrise_agent_assert( ! is_wp_error( $result ) && 1 === count( $reports ) && $next === wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ), 'Manual sync works before cron is due; unchanged policy needs one request' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'], $reports[0]['automatic_update_failures'] ), 'Acknowledged unchanged profile is omitted from later reports' );
 	remove_filter( 'pre_http_request', $reply );

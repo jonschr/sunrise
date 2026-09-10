@@ -353,6 +353,9 @@ function agent_check_in() {
 				$resolved = failure_resolutions( isset( $state['failure_checks'] ) ? $state['failure_checks'] : array(), $state['pending_report']['inventory'] );
 				if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
 			}
+			if ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) {
+				$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
+			}
 			if ( ! empty( $state['file_transfers'] ) ) { $state['pending_report']['file_transfer_version'] = class_exists( 'ZipArchive' ) ? 1 : 0; }
 			if ( ! empty( $state['site_profiles'] ) ) {
 				$profile = agent_site_profile();
@@ -380,6 +383,8 @@ function agent_check_in() {
 		$state['applied'] = $applied;
 		$state['sequence'] = $response['receipt_sequence'];
 		$state['last_success'] = time();
+		$state['wake_requests'] = isset( $response['wake_requests'] ) && true === $response['wake_requests'];
+		if ( isset( $state['pending_report']['wake_key'] ) && $state['wake_requests'] ) { $state['wake_registered'] = true; }
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
 		if ( isset( $response['failure_checks'] ) && ! validate_failure_checks( $response['failure_checks'] ) ) { return new \WP_Error( 'sunrise_failure_checks', 'Invalid failure-resolution checks.' ); }
 		$state['update_failures'] = isset( $response['update_failures'] ) && true === $response['update_failures'];
@@ -394,7 +399,7 @@ function agent_check_in() {
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
-		return array( 'profile_pending' => ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ), 'transfer_work_available' => $state['transfer_previews'] && ! empty( $response['transfer_work_available'] ), 'transfer_execution_available' => $state['transfer_execution'] && ! empty( $response['transfer_execution_available'] ) );
+		return array( 'profile_pending' => ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ), 'transfer_work_available' => $state['transfer_previews'] && ! empty( $response['transfer_work_available'] ), 'transfer_execution_available' => $state['transfer_execution'] && ! empty( $response['transfer_execution_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );
 		\WP_Upgrader::release_lock( 'sunrise_agent' );
