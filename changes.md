@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.14 — 2026-09-10
+
+- Classify central update failures into safe, useful reasons such as license, package download, filesystem, and compatibility failures without transmitting provider messages, package URLs, or credentials.
+
 ## 0.2.13 — 2026-09-10
 
 - Read the installed WordPress core version from the replaced core files after a successful update, instead of reporting the stale version loaded at the start of the request.

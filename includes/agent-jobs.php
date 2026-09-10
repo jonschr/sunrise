@@ -22,6 +22,11 @@ function agent_job_clear( &$state ) {
 	if ( $fence && $fence['site_id'] === $state['site_id'] && ! delete_option( 'sunrise_remote_job_fence' ) ) { throw new \RuntimeException( 'Could not release execution fence' ); }
 	agent_job_save( $state, null );
 }
+function agent_job_failure_code( $error ) {
+	$code = preg_replace( '/[^a-z_]/', '', substr( $error->get_error_code(), 0, 80 ) );
+	$reason = automatic_failure_reason( $error );
+	return 'unknown' === $reason ? ( $code ?: 'update_failed' ) : $reason;
+}
 function agent_job_response( $response, $id = null ) {
 	if ( is_wp_error( $response ) ) { return $response; }
 	if ( ! array_key_exists( 'job', $response ) ) { return new \WP_Error( 'sunrise_job_schema', 'Invalid job response.' ); }
@@ -128,7 +133,7 @@ function agent_run_update_job() {
 			if ( 'core' !== $task['type'] && $task['identity'] != agent_item_identity( $task['type'] . 's', $task['installed_id'] ) ) { $result = job_error( 'component_identity_changed', 'The component identity changed after approval.' ); }
 			if ( ! is_wp_error( $result ) ) { $result = install_update( $native ); }
 			$record['status'] = is_wp_error( $result ) ? 'failed' : 'succeeded';
-			$record['code'] = is_wp_error( $result ) ? preg_replace( '/[^a-z_]/', '', substr( $result->get_error_code(), 0, 80 ) ) : $result['code'];
+			$record['code'] = is_wp_error( $result ) ? agent_job_failure_code( $result ) : $result['code'];
 			if ( ! $record['code'] ) { $record['code'] = 'update_failed'; }
 		} catch ( \Throwable $error ) { $record['status'] = 'uncertain'; $record['code'] = 'execution_interrupted'; }
 		$fence['result'] = array( 'status' => $record['status'], 'code' => $record['code'] );

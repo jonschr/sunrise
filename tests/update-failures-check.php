@@ -6,6 +6,9 @@ try {
  delete_option( 'sunrise_automatic_update_failures' );
  $item = (object) array( 'plugin' => 'fixture/fixture.php', 'new_version' => '2.0' );
  $result = (object) array( 'item' => $item, 'result' => new WP_Error( 'download_failed', 'License expired: secret-key https://provider.test/?key=secret' ) );
+ require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
+ $check( 'license_required' === Sunrise\agent_job_failure_code( $result->result ), 'Central jobs must report a safe specific reason' );
+ $check( 'sunrise_database_upgrade_pending' === Sunrise\agent_job_failure_code( new WP_Error( 'sunrise_database_upgrade_pending', 'Database upgrade required.' ) ), 'Sunrise job errors must retain their specific code' );
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  $inventory = array( array( 'type' => 'plugins', 'installed_id' => 'fixture/fixture.php', 'version' => '1.0' ) );
