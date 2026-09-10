@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.21 — 2026-09-10
+
+- Replace the migration sidebar gradient with the Sunrise sky image and refine navigation contrast, hover feedback, and spacing.
+
 ## 0.2.20 — 2026-09-10
 
 - Relay central service failures once through the embedded dashboard and show the branded, centered maintenance state instead of duplicate raw errors above and inside the frame.
