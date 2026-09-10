@@ -24,7 +24,7 @@ function agent_url() {
 /** Navigation hints only; the Control origin separately authenticates and authorizes the human. */
 function agent_dashboard_url() {
 	$state = agent_state();
-	if ( ! current_user_can( 'manage_options' ) || ! $state || ! agent_owner_valid( $state ) || ! agent_service_matches( $state ) || is_wp_error( installation_guard() ) ) { return false; }
+	if ( ! current_user_can( 'manage_options' ) || ! $state || ! empty( $state['revoked'] ) || ! agent_owner_valid( $state ) || ! agent_service_matches( $state ) || is_wp_error( installation_guard() ) ) { return false; }
 	foreach ( array( 'account_id', 'network_id', 'site_id' ) as $key ) {
 		if ( empty( $state[ $key ] ) || ! is_string( $state[ $key ] ) || ! wp_is_uuid( $state[ $key ], 4 ) ) { return false; }
 	}
@@ -86,6 +86,7 @@ function agent_access( $enrollment = false ) {
 }
 
 function agent_http( $path, $data, $state, $method = 'POST' ) {
+	if ( ! empty( $state['revoked'] ) ) { return new \WP_Error( 'sunrise_disconnected', 'This connection was disconnected. Reconnect this administrator to continue.', array( 'status' => 401 ) ); }
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 	if ( ! agent_owner_valid( $state ) || (int) $state['user_id'] !== get_current_user_id() ) { return new \WP_Error( 'sunrise_agent_owner', 'Connection owner access required.' ); }
 	if ( ! agent_service_matches( $state ) || $state['url'] !== untrailingslashit( site_url() ) ) {
@@ -122,6 +123,9 @@ function agent_enroll_locked() {
 	$access = agent_access( true ); if ( is_wp_error( $access ) ) { return $access; }
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 	$state = agent_state();
+	if ( ! empty( $state['revoked'] ) ) {
+		$cleared = agent_disconnect_locked(); if ( is_wp_error( $cleared ) ) { return $cleared; } $state = array();
+	}
 	if ( ! $state ) {
 		require_once __DIR__ . '/controller.php';
 		$state = array( 'control_url' => agent_url(), 'url' => untrailingslashit( site_url() ), 'user_id' => get_current_user_id(), 'sequence' => 0 );
@@ -334,6 +338,7 @@ function agent_check_in() {
 	try {
 		$state = agent_state();
 		if ( ! $state || empty( $state['enrollment_id'] ) ) { return new \WP_Error( 'sunrise_not_enrolled', 'Start enrollment first.' ); }
+		if ( ! empty( $state['revoked'] ) ) { return new \WP_Error( 'sunrise_disconnected', 'This connection was disconnected. Reconnect this administrator to continue.' ); }
 		$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 		if ( ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_agent_owner', 'The enrolling user no longer has update capabilities.' ); }
 		wp_set_current_user( $state['user_id'] );
@@ -371,7 +376,10 @@ function agent_check_in() {
 		$response = agent_http( 'agent/check-in', $state['pending_report'], $state );
 		if ( is_wp_error( $response ) ) {
 			$data = $response->get_error_data();
-			if ( is_array( $data ) && 401 === $data['status'] ) { $state['revoked'] = true; agent_store( $state ); }
+			if ( is_array( $data ) && 401 === $data['status'] ) {
+				$state['revoked'] = true; unset( $state['pending_report'] ); agent_store( $state );
+				wp_clear_scheduled_hook( 'sunrise_check_in', array( (int) $state['user_id'] ) );
+			}
 			return $response;
 		}
 		if ( ! isset( $response['receipt_sequence'] ) || $response['receipt_sequence'] !== $state['pending_report']['sequence'] ) { return new \WP_Error( 'sunrise_agent_receipt', 'Invalid check-in receipt.' ); }
@@ -415,8 +423,8 @@ function agent_disconnect() {
 function agent_disconnect_locked() {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	$state = agent_state();
-	if ( ! empty( $state['remote_job'] ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending installation before disconnecting.' ); }
-	if ( $state && ! empty( $state['site_id'] ) ) {
+	if ( ! empty( $state['remote_job'] ) || ! empty( $state['remote_transfer'] ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending update or migration before reconnecting or clearing this connection.' ); }
+	if ( $state && ! empty( $state['site_id'] ) && empty( $state['revoked'] ) ) {
 		$result = agent_http( 'agent/enrollment', array(), $state, 'DELETE' );
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();

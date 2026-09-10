@@ -147,6 +147,27 @@ try {
 	$wire['generation'] = 1; $wire['document_json'] = wp_json_encode( $document ); $wire['hash'] = hash( 'sha256', $wire['document_json'] );
 	$newer = $state; $newer['applied']['generation'] = 2;
 	sunrise_agent_assert( is_wp_error( Sunrise\agent_accept_policy( $wire, $newer ) ), 'Older policy generations cannot replace newer state' );
+
+	// Disconnect is per administrator; an unconnected connector is idle and native settings remain untouched.
+	$native_updates = get_site_option( 'auto_update_plugins' ); $http_count = 0;
+	$reject = function () use ( &$http_count ) { $http_count++; return array( 'response' => array( 'code' => 401 ), 'headers' => array(), 'body' => '{"error":{"code":"enrollment_revoked"}}' ); };
+	add_filter( 'pre_http_request', $reject );
+	try {
+		Sunrise\agent_store_states( array() ); do_action( 'sunrise_check_in', $original_user );
+		sunrise_agent_assert( 0 === $http_count && null === Sunrise\agent_effective_policy() && ! Sunrise\error_capture_enabled(), 'Unconnected plugin sends no reports and supplies no remote policy' );
+		Sunrise\agent_store_states( array( $original_user => $state ) ); Sunrise\agent_schedule( 300 );
+		$result = Sunrise\agent_check_in();
+		sunrise_agent_assert( is_wp_error( $result ) && Sunrise\agent_state()['revoked'] && ! wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ), 'Revocation stops this administrator check-in schedule' );
+		sunrise_agent_assert( null === Sunrise\agent_effective_policy() && false === Sunrise\agent_dashboard_url() && ! Sunrise\error_capture_enabled(), 'Revoked connection stops remote policy, dashboard and error reporting' );
+		ob_start(); Sunrise\admin_page(); $disconnected_html = ob_get_clean();
+		sunrise_agent_assert( false !== strpos( $disconnected_html, 'This connection was disconnected' ) && false !== strpos( $disconnected_html, 'agent_enroll' ) && false === strpos( $disconnected_html, 'id="sunrise-dashboard"' ), 'Disconnected administrator gets the reconnection page' );
+		$requests = $http_count; Sunrise\agent_sync(); do_action( 'sunrise_check_in', $original_user );
+		sunrise_agent_assert( $requests === $http_count, 'Known revoked connection remains idle on later sync attempts' );
+		$other_state = $state; $other_state['user_id'] = $other_admin; Sunrise\agent_store_states( array( $original_user => Sunrise\agent_state(), $other_admin => $other_state ) );
+		sunrise_agent_assert( null !== Sunrise\agent_effective_policy(), 'Other administrator policy remains active' );
+		sunrise_agent_assert( ! is_wp_error( Sunrise\agent_disconnect() ) && isset( Sunrise\agent_states()[ $other_admin ] ), 'Clearing revoked credentials leaves the other administrator connection intact' );
+		sunrise_agent_assert( $native_updates === get_site_option( 'auto_update_plugins' ), 'Disconnect does not rewrite native auto-update selections' );
+	} finally { remove_filter( 'pre_http_request', $reject ); }
 } finally {
 	wp_set_current_user( $original_user );
 	if ( is_int( $other_admin ) && $other_admin > 0 ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $other_admin ); }

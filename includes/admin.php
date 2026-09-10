@@ -177,8 +177,9 @@ function admin_page( $view = 'network' ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
-	if ( agent_url() && ! agent_state() && ! is_wp_error( installation_guard() ) ) {
-		echo '<h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this WordPress site to your Sunrise account.', 'sunrise' ) . '</p>';
+	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! is_wp_error( installation_guard() ) ) {
+		echo '<h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to manage the network. Until connected, Sunrise sends no inventory or error reports. Its own update checker remains active.', 'sunrise' ) . '</p>';
+		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
 		form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect this site', 'sunrise' ), 'primary', 'submit', false ); echo '</form></div>';
 		return;
 	}
