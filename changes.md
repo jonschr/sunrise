@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.19 — 2026-09-10
+
+- Give the native WordPress migration screen the same Sunrise gradient sidebar and direct Network/Migrations navigation as the rest of the managed interface.
+- Replace the misleading source/destination-first controls with one other-site selector followed by explicit Push and Pull choices. Show the resolved source → destination route only after the other site is selected.
+
 ## 0.2.18 — 2026-09-10
 
 - Keep migration selection, preparation, exact-plan review, approval, cancellation, progress, and recovery in the WordPress administrator. Local sites use the same workflow without opening the hosted app.

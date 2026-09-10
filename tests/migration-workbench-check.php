@@ -22,6 +22,8 @@ try {
  $id = wp_generate_uuid4(); $assert( ! is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'source', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) && '/approve' === substr( $requests[2]['path'], -8 ) );
  $assert( is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'both', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) );
  remove_filter( 'pre_http_request', $http, 10 );
+ require_once WP_PLUGIN_DIR . '/sunrise/includes/network.php'; ob_start(); Sunrise\managed_network_page( 'migrations' ); $markup = ob_get_clean();
+ $assert( false !== strpos( $markup, 'sunrise-migration-sidebar' ) && false !== strpos( $markup, 'Other connected site' ) && false !== strpos( $markup, 'migration-direction-choice' ) && false === strpos( $markup, 'migration-swap' ) );
  wp_set_current_user( 0 ); $assert( is_wp_error( Sunrise\save_migration_draft( $draft ) ) && is_wp_error( Sunrise\migration_status() ) && is_wp_error( Sunrise\migration_peers() ) && is_wp_error( Sunrise\migration_sync() ) ); wp_set_current_user( $owner );
- WP_CLI::success( 'Per-owner drafts and direct WordPress preparation/approval passed without an app UI.' );
+ WP_CLI::success( 'Native migration shell, one-site direction flow, per-owner drafts, and direct preparation/approval passed.' );
 } finally { wp_set_current_user( $owner ); if ( $saved ) { update_user_meta( $owner, 'sunrise_migration_draft', $saved ); } else { delete_user_meta( $owner, 'sunrise_migration_draft' ); } }

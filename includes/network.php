@@ -108,9 +108,11 @@ function managed_network_page( $view ) {
 		form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>'; return;
 	}
 	if ( 'migrations' === $view ) {
+		echo '<div class="sunrise-migration-shell"><aside class="sunrise-migration-sidebar"><a class="sunrise-migration-brand" href="' . esc_url( add_query_arg( 'page', 'sunrise', admin_url( 'admin.php' ) ) ) . '"><span aria-hidden="true"></span>Sunrise</a><nav aria-label="Sunrise"><a href="' . esc_url( add_query_arg( 'page', 'sunrise', admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'Network', 'sunrise' ) . '</a><a href="' . esc_url( add_query_arg( 'page', 'sunrise-migrations', admin_url( 'admin.php' ) ) ) . '" aria-current="page">' . esc_html__( 'Migrations', 'sunrise' ) . '</a></nav><footer><strong>' . esc_html( get_bloginfo( 'name' ) ) . '</strong><small>' . esc_html( home_url( '/' ) ) . '</small></footer></aside><main class="sunrise-migration-content">';
 		require_once __DIR__ . '/migrations.php'; migration_workbench_page();
 		require_once __DIR__ . '/transfer-options.php'; transfer_recovery_page();
 		require_once __DIR__ . '/transfer-files.php'; transfer_file_recovery_page();
+		echo '</main></div>';
 		return;
 	}
 	require_once __DIR__ . '/dashboard.php'; dashboard_page();

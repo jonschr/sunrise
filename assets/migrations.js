@@ -7,7 +7,8 @@
  function route(){const peer=draft.peer || {name:'Choose a connected site',url:''};return draft.direction==='push'?[cfg.site,peer]:[peer,cfg.site];}
  function render(){
   const [source,destination]=route();for(const [side,site] of [['source',source],['destination',destination]]){$('migration-'+side).textContent=site.name || site.url;$('migration-'+side+'-url').textContent=site.url;}
-  $('migration-direction').textContent=draft.direction==='push'?'Push from this site to the destination.':'Pull from the source into this site.';
+  $('migration-direction-options').hidden=!draft.peer;$('migration-route').hidden=!draft.peer;for(const input of root.querySelectorAll('[name=migration-direction-choice]'))input.checked=input.value===draft.direction;for(const label of root.querySelectorAll('[data-migration-peer-name]'))label.textContent=draft.peer?.name || draft.peer?.url || 'the other site';
+  $('migration-direction').textContent=!draft.peer?'':draft.direction==='push'?'Push: this site is the source and '+(draft.peer.name || draft.peer.url)+' is the destination.':'Pull: '+(draft.peer.name || draft.peer.url)+' is the source and this site is the destination.';
   $('migration-preset').value=draft.preset;$('migration-since').value=draft.since;$('migration-date').value=draft.date;$('migration-date-label').hidden=draft.since!=='date';
   for(const input of root.querySelectorAll('.migration-scope-input'))input.checked=draft.scopes.includes(input.value);
   for(const input of $('migration-settings').querySelectorAll('input'))input.checked=draft.names.includes(input.value);
@@ -30,6 +31,7 @@
  root.addEventListener('change',event=>{
   const el=event.target;if(el.classList.contains('migration-scope-input')){draft.scopes=[...root.querySelectorAll('.migration-scope-input:checked')].map(i=>i.value);draft.preset='custom';}
   else if(el.id==='migration-peer'){draft.peer=peers.get(el.value) || null;}
+  else if(el.name==='migration-direction-choice')draft.direction=el.value;
   else if(el.dataset.componentScope){const scope=el.dataset.componentScope;draft.file_selection[scope].items=[...$('migration-'+scope+'-list').querySelectorAll('input:checked')].map(i=>i.value);}
   else if(el.name==='migration-plugins-mode' || el.name==='migration-themes-mode'){const scope=el.name.split('-')[1];draft.file_selection[scope].mode=el.value;}
   else if(el.name==='migration-media-mode'){draft.file_selection.media.mode=el.value;draft.file_selection.media.since=el.value==='date'?Math.floor(Date.now()/60000)*60:null;}
@@ -38,7 +40,6 @@
   else if(el.id==='migration-preset'){draft.preset=el.value;const presets={settings:['options'],content:['posts','options','media'],files:['plugins','themes']};if(presets[el.value])draft.scopes=presets[el.value];}
   else if(el.id==='migration-since')draft.since=el.value;else if(el.id==='migration-date')draft.date=el.value;else return;changed();
  });
- $('migration-swap').onclick=()=>{draft.direction=draft.direction==='push'?'pull':'push';changed();};
  $('migration-prepare').onclick=async()=>{const button=$('migration-prepare'),files=draft.scopes.some(scope=>['plugins','themes','media'].includes(scope)),count=(draft.scopes.includes('options')?1:0)+(files?1:0)+(draft.scopes.includes('tables')?1:0),signature=JSON.stringify(draft);if(signature!==prepareSignature){prepareSignature=signature;prepareKeys=Array.from({length:count},()=>crypto.randomUUID());}button.disabled=true;log('Preparing migration from this WordPress screen.');try{display(await api('/prepare',{keys:prepareKeys,draft}));prepareSignature='';prepareKeys=[];display(await api('/sync',{}));log('Migration prepared. Review the exact plan below.');}catch(error){$('migration-status').textContent=error.message;log(error.message);}finally{render();}};
  const states={no_changes:'No changed files to migrate',awaiting_source:'Waiting for source snapshot',awaiting_destination:'Comparing destination',ready:'Ready for approval',approved:'Approved · waiting for destination',running:'Applying destination changes',succeeded:'Completed',failed:'Failed',uncertain:'Outcome needs inspection',closed_unverified:'Closed without verification',cancelled:'Cancelled',expired:'Expired'};
  const settingLabels={blogname:'Site title',blogdescription:'Tagline',date_format:'Date format',time_format:'Time format',start_of_week:'Week starts on',timezone_string:'Timezone',gmt_offset:'UTC offset'};
