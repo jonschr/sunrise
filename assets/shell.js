@@ -1,0 +1,1 @@
+(()=>{'use strict';const dialog=document.getElementById('sunrise-site-settings');if(!dialog)return;for(const node of document.querySelectorAll('.sunrise-identity:not([open]),.sunrise-connection'))dialog.append(node);document.querySelector('[data-sunrise-dialog]')?.addEventListener('click',()=>dialog.showModal());})();

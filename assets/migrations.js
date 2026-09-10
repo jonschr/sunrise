@@ -1,7 +1,7 @@
 /* Preferences contain no authority. Every migration still requires independent Control approval. */
 (()=>{
  'use strict';const cfg=sunriseMigrations,$=id=>document.getElementById(id),root=$('sunrise-migration-workbench');if(!root)return;
- let draft=cfg.draft,popup=null,channel=null,saving=false,dirty=false,polling=false,known=new Map(),execution=false,fileTransfers=false,catalogSite=null,catalogRequest=0,catalogLoaded=false,catalog={plugins:[],themes:[]},autoWork=false,syncing=false;
+ let draft=cfg.draft,popup=null,channel=null,saving=false,dirty=false,polling=false,known=new Map(),execution=false,fileTransfers=false,catalogSite=null,catalogRequest=0,catalogLoaded=false,catalog={plugins:[],themes:[]},autoWork=false,syncing=false,peers=new Map();
  const api=async(path='',data)=>{const url=new URL(cfg.api),[suffix,query]=path.split('?');if(url.searchParams.has('rest_route'))url.searchParams.set('rest_route',url.searchParams.get('rest_route')+suffix);else url.pathname+=suffix;for(const [key,value] of new URLSearchParams(query || ''))url.searchParams.set(key,value);const r=await fetch(url,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:{'X-WP-Nonce':cfg.nonce,'Content-Type':'application/json'},...(data===undefined?{}:{body:JSON.stringify(data)})});const value=await r.json();if(!r.ok)throw new Error(value.message || 'Sunrise could not complete this request.');return value;};
  const log=message=>{const item=document.createElement('li');item.textContent=new Date().toLocaleTimeString()+' · '+message;$('migration-log').prepend(item);while($('migration-log').children.length>100)$('migration-log').lastChild.remove();};
  function route(){const peer=draft.peer || {name:'Choose a connected site',url:''};return draft.direction==='push'?[cfg.site,peer]:[peer,cfg.site];}
@@ -29,6 +29,7 @@
  function changed(){dirty=true;$('migration-save').textContent='Saving…';render();save();}
  root.addEventListener('change',event=>{
   const el=event.target;if(el.classList.contains('migration-scope-input')){draft.scopes=[...root.querySelectorAll('.migration-scope-input:checked')].map(i=>i.value);draft.preset='custom';}
+  else if(el.id==='migration-peer'){draft.peer=peers.get(el.value) || null;}
   else if(el.dataset.componentScope){const scope=el.dataset.componentScope;draft.file_selection[scope].items=[...$('migration-'+scope+'-list').querySelectorAll('input:checked')].map(i=>i.value);}
   else if(el.name==='migration-plugins-mode' || el.name==='migration-themes-mode'){const scope=el.name.split('-')[1];draft.file_selection[scope].mode=el.value;}
   else if(el.name==='migration-media-mode'){draft.file_selection.media.mode=el.value;draft.file_selection.media.since=el.value==='date'?Math.floor(Date.now()/60000)*60:null;}
@@ -41,15 +42,9 @@
  function openControl(mode){
   channel=crypto.randomUUID();const url=new URL(cfg.control);url.searchParams.set('view','migrations');url.searchParams.set('workbench_site',cfg.site.id);url.searchParams.set('workbench_origin',location.origin);url.searchParams.set('workbench_channel',channel);url.searchParams.set('workbench_mode',mode);
   if(mode==='prepare'){const [source,destination]=route();url.searchParams.set('migration_source',source.id);url.searchParams.set('migration_destination',destination.id);const files=Object.fromEntries(draft.scopes.filter(scope=>['plugins','themes','media'].includes(scope)).map(scope=>[scope,draft.file_selection[scope]]));if(Object.keys(files).length)url.searchParams.set('migration_files',JSON.stringify(files));else url.searchParams.set('migration_settings',draft.names.join(','));}
-  popup=window.open(url.href,'sunrise-migration-'+channel,'popup,width=1100,height=850');if(!popup){$('migration-status').textContent='Allow the Sunrise Control window to open, then try again.';return;}log(mode==='pick'?'Choosing a connected site in Sunrise Control.':'Opening exact transfer preparation in Sunrise Control.');
+  popup=window.open(url.href,'sunrise-migration-'+channel,'popup,width=1100,height=850');if(!popup){$('migration-status').textContent='Allow the Sunrise Control window to open, then try again.';return;}log('Opening exact transfer preparation in Sunrise Control.');
  }
- $('migration-choose').onclick=()=>openControl('pick');$('migration-prepare').onclick=()=>openControl('prepare');
- window.addEventListener('message',event=>{
-  if(event.origin!==new URL(cfg.control).origin || event.source!==popup || event.data?.channel!==channel || event.data?.type!=='sunrise-migration-peer')return;
-  const peer=event.data.peer;if(!peer || !/^[0-9a-f-]{36}$/.test(peer.id) || peer.id===cfg.site.id || typeof peer.name!=='string' || peer.name.length>255 || typeof peer.url!=='string' || peer.url.length>2048)return;
-  let url;try{url=new URL(peer.url);}catch{return;}if(!['https:','http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)return;
-  draft.peer={id:peer.id,name:peer.name,url:peer.url};changed();log('Connected site selected.');popup.close();channel=null;popup=null;
- });
+ $('migration-prepare').onclick=()=>openControl('prepare');
  const states={no_changes:'No changed files to migrate',awaiting_source:'Waiting for source snapshot',awaiting_destination:'Comparing destination',ready:'Ready for approval',approved:'Approved · waiting for destination',running:'Applying destination changes',succeeded:'Completed',failed:'Failed',uncertain:'Outcome needs inspection',closed_unverified:'Closed without verification',cancelled:'Cancelled',expired:'Expired'};
  function display(data){
   execution=data.execution_available===true;fileTransfers=data.file_transfers===true;autoWork=(data.items || []).some(job=>job.file_selection && ((job.source_site_id===cfg.site.id && job.status==='awaiting_source') || (job.destination_site_id===cfg.site.id && ['awaiting_destination','approved'].includes(job.status))));render();$('migration-jobs').replaceChildren();for(const job of data.items || []){
@@ -62,5 +57,6 @@
  }
  async function poll(){if(polling || document.hidden)return;polling=true;try{display(await api('/status'));if(autoWork && !syncing){syncing=true;try{display(await api('/sync',{}));}finally{syncing=false;}}}catch(error){$('migration-status').textContent=error.message;}finally{polling=false;}}
  $('migration-sync').onclick=async()=>{const button=$('migration-sync');if(syncing)return;syncing=true;button.disabled=true;log('Checking this site’s transfer work.');try{display(await api('/sync',{}));log('This site’s transfer check finished.');}catch(error){$('migration-status').textContent=error.message;log(error.message);}finally{syncing=false;button.disabled=false;}};
+ (async()=>{const select=$('migration-peer'),status=$('migration-peer-status');select.disabled=true;try{let after=null;do{const page=await api('/peers'+(after?'?after='+encodeURIComponent(after):''));for(const peer of page.items)peers.set(peer.id,peer);after=page.next_cursor;}while(after);select.replaceChildren(new Option('Choose a connected site',''));for(const peer of peers.values())select.add(new Option(peer.name===peer.url?peer.url:peer.name+' · '+peer.url,peer.id));if(draft.peer && !peers.has(draft.peer.id)){draft.peer=null;changed();}select.value=draft.peer?.id || '';select.disabled=false;status.textContent=peers.size?'':'No other connected sites are available.';}catch(error){select.replaceChildren(new Option('Sites unavailable',''));status.textContent=error.message;}})();
  render();poll();setInterval(poll,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
 })();

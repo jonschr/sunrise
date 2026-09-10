@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.9 — 2026-09-09
+
+- Fill the WordPress content area on Sunrise pages and suppress unrelated WordPress notices there. Move installation and connection controls into Site settings.
+- Select migration peers directly from an authenticated, paginated dropdown. Preserve the selected site and direction without opening a Control window.
+- Show the one-time network permission link only when needed. Exact migration approvals still require authenticated Control access.
+
 ## 0.2.8 — 2026-09-09
 
 - Implement plugin and theme file selection: all, active, selected, or all except selected. Include active parent themes and exclude Sunrise itself.

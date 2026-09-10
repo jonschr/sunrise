@@ -14,6 +14,10 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 	wp_add_inline_style( 'common', '#adminmenu #toplevel_page_sunrise .wp-menu-image:before{content:"";display:block;width:20px;height:20px;padding:0;margin:7px auto;background-color:currentColor;-webkit-mask:url("' . $icon . '") center/contain no-repeat;mask:url("' . $icon . '") center/contain no-repeat}' );
 	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
+		foreach ( array( 'admin_notices', 'all_admin_notices', 'network_admin_notices' ) as $notice_hook ) { remove_all_actions( $notice_hook ); }
+		add_filter( 'admin_body_class', function ( $classes ) { return $classes . ' sunrise-app-page'; } );
+		wp_enqueue_style( 'sunrise-dashboard', plugins_url( '../assets/dashboard.css', __FILE__ ), array(), VERSION );
+		wp_enqueue_script( 'sunrise-shell', plugins_url( '../assets/shell.js', __FILE__ ), array(), VERSION, true );
 		admin_load();
 		if ( 'sunrise_page_sunrise-migrations' === $hook ) { wp_enqueue_style( 'sunrise-migrations', plugins_url( '../assets/migrations.css', __FILE__ ), array(), VERSION ); }
 		if ( 'toplevel_page_sunrise' === $hook && agent_url() ) { wp_enqueue_style( 'sunrise-dashboard', plugins_url( '../assets/dashboard.css', __FILE__ ), array(), VERSION ); }
@@ -165,6 +169,9 @@ function admin_page( $view = 'network' ) {
 	admin_load();
 	$site = isset( $_GET['site'] ) && is_string( $_GET['site'] ) ? sanitize_key( wp_unslash( $_GET['site'] ) ) : 'overview';
 	echo '<div class="wrap sunrise-wrap"><h1>' . esc_html( 'migrations' === $view ? __( 'Sunrise Migrations', 'sunrise' ) : __( 'Sunrise Network', 'sunrise' ) ) . '</h1>';
+	echo '<header class="sunrise-shell-header"><strong>Sunrise</strong><nav><a href="' . esc_url( admin_url( 'admin.php?page=sunrise' ) ) . '">Updates</a><a href="' . esc_url( admin_url( 'admin.php?page=sunrise-migrations' ) ) . '">Migrations</a></nav><div>' ;
+	if ( agent_dashboard_url() ) { echo '<a href="' . esc_url( add_query_arg( 'view', 'administration', agent_dashboard_url() ) ) . '">Administration ↗</a> '; }
+	echo '<button type="button" class="button" data-sunrise-dialog="sunrise-site-settings">Site settings</button></div></header><dialog id="sunrise-site-settings"><form method="dialog"><button class="button">Close</button></form><h2>Site settings</h2></dialog>';
 	$notice = get_transient( 'sunrise_notice_' . get_current_user_id() );
 	if ( $notice ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
@@ -180,7 +187,7 @@ function admin_page( $view = 'network' ) {
 	$anchor_id = installation_anchor();
 	$identity_id = $anchor_id ? $anchor_id : ( is_array( $identity ) && isset( $identity['id'] ) && is_string( $identity['id'] ) ? $identity['id'] : '' );
 	$database_replaced = $anchor_id && is_array( $identity ) && isset( $identity['id'] ) && $anchor_id !== $identity['id'];
-	echo '<details' . ( is_wp_error( $identity_error ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Installation identity', 'sunrise' ) . '</summary><p><code>' . esc_html( $identity_id ) . '</code></p>';
+	echo '<details class="sunrise-identity"' . ( is_wp_error( $identity_error ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Installation identity', 'sunrise' ) . '</summary><p><code>' . esc_html( $identity_id ) . '</code></p>';
 	if ( is_wp_error( $identity_error ) ) {
 		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Sunrise is paused because this installation changed. Is this a clone, or the existing site after a move or security-key change?', 'sunrise' ) . '</p></div>';
 	}

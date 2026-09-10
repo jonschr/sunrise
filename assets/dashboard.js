@@ -10,8 +10,8 @@
   pending.add(msg.id);active++;
   try{
    const response=await fetch(cfg.api,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':cfg.nonce},body,signal:AbortSignal.timeout(22000)}),result=await response.json();
-   if(!response.ok){const message=result.data?.remote_code==='dashboard_approval_required'?'Enable network dashboard permission above, then reload Sunrise.':result.message || 'Sunrise could not load the network.';status.textContent=message;send({error:message});return;}
-   status.textContent='';send({result});
+   if(!response.ok){const message=result.data?.remote_code==='dashboard_approval_required'?'Sign in once to authorize network controls for this connection.':result.message || 'Sunrise could not load the network.';document.getElementById('sunrise-dashboard-permission').hidden=result.data?.remote_code!=='dashboard_approval_required';status.textContent=message;send({error:message});return;}
+   document.getElementById('sunrise-dashboard-permission').hidden=true;status.textContent='';send({result});
   }catch{status.textContent='The network service is unavailable. Reload to try again.';send({error:status.textContent});}
   finally{active--;pending.delete(msg.id);}
  });
