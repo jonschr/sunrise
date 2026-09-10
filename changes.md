@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.12 — 2026-09-10
+
+- Treat a connection revoked by Control as disconnected: stop scheduled check-ins, remote policy, network dashboard access and error reporting until an administrator reconnects.
+- Keep an installed but unconnected plugin idle, preserve native auto-update selections, and leave other administrators' connections intact.
+
 ## 0.2.11 — 2026-09-09
 
 - Add an authenticated wake-only endpoint that schedules an immediate check-in and starts WordPress cron. Requests are bound to the administrator connection, generation and URL, expire quickly, and are replay-safe and rate-limited.

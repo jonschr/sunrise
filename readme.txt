@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.2.11
+Stable tag: 0.2.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,10 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.2.12 =
+* Stop remote activity after Control revokes a connection and offer reconnection in WordPress.
+* Keep unconnected installations idle without changing native auto-update selections or other administrators' connections.
 
 = 0.2.10 =
 * Check in every five minutes for testing, with existing short jitter and retry backoff.
