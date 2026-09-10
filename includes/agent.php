@@ -353,6 +353,7 @@ function agent_check_in() {
 				$resolved = failure_resolutions( isset( $state['failure_checks'] ) ? $state['failure_checks'] : array(), $state['pending_report']['inventory'] );
 				if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
 			}
+			if ( ! empty( $state['file_transfers'] ) ) { $state['pending_report']['file_transfer_version'] = class_exists( 'ZipArchive' ) ? 1 : 0; }
 			if ( ! empty( $state['site_profiles'] ) ) {
 				$profile = agent_site_profile();
 				if ( hash( 'sha256', wp_json_encode( $profile ) ) !== ( isset( $state['site_profile_hash'] ) ? $state['site_profile_hash'] : '' ) ) { $state['pending_report']['site_profile'] = $profile; }
@@ -389,6 +390,7 @@ function agent_check_in() {
 		$state['errors_supported'] = isset( $response['error_reports'] ) && true === $response['error_reports'];
 		$state['transfer_previews'] = isset( $response['transfer_previews'] ) && true === $response['transfer_previews'];
 		$state['transfer_execution'] = isset( $response['transfer_execution'] ) && true === $response['transfer_execution'];
+		$state['file_transfers'] = isset( $response['file_transfers'] ) && true === $response['file_transfers'];
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }

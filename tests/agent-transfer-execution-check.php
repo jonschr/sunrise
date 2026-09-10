@@ -49,6 +49,8 @@ try {
 	execution_check( true === Sunrise\agent_run_transfer() && 'unknown' === $job['outcome'] && get_option( 'sunrise_remote_job_fence' ) && 'uncertain' === Sunrise\agent_state()['remote_transfer']['phase'], 'An interrupted execution without a journal stays fenced and uncertain' );
 	execution_check( false === Sunrise\agent_run_transfer() && 'status' === end( $calls )[0], 'Unknown execution is inspected rather than automatically retried' );
 	$job['status'] = 'closed_unverified'; execution_check( true === Sunrise\agent_run_transfer() && ! get_option( 'sunrise_remote_job_fence' ), 'Explicit closure after worker stop releases the fence' );
+	$make(); $job['plan_json'] = wp_json_encode( array( 'schema' => 1, 'scope' => 'files', 'destination_site_id' => Sunrise\agent_state()['site_id'], 'source_site_id' => wp_generate_uuid4(), 'changes' => array() ) ); $job['plan_hash'] = hash( 'sha256', $job['plan_json'] ); $job['archive'] = array( 'bytes' => -1, 'sha256' => 'invalid' );
+	execution_check( true === Sunrise\agent_run_transfer() && 'failed' === $job['status'] && 'not_applied' === $job['outcome'] && ! get_option( 'sunrise_remote_job_fence' ) && empty( Sunrise\agent_state()['remote_transfer'] ), 'Unverifiable file download reports failure without entering the writer or retrying forever' );
 	$make(); $state = Sunrise\agent_state(); $state['paused'] = true; Sunrise\agent_store( $state ); $count = count( $calls );
 	execution_check( false === Sunrise\agent_run_transfer() && count( $calls ) === $count, 'A local pause prevents new transfer work without HTTP calls' );
 	execution_check( $identity === Sunrise\installation_identity(), 'Execution and recovery preserve destination installation identity' );

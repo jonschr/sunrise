@@ -13,7 +13,7 @@ function agent_prepare_transfer() {
 		$state = agent_state();
 		if ( empty( $state['transfer_previews'] ) ) { return false; }
 		$pending = isset( $state['transfer_report'] ) ? $state['transfer_report'] : null;
-		if ( $pending && ( ! is_array( $pending ) || ! isset( $pending['id'], $pending['phase'], $pending['deadline'], $pending['payload'] ) || ! is_string( $pending['id'] ) || ! wp_is_uuid( $pending['id'], 4 ) || ! in_array( $pending['phase'], array( 'source', 'destination' ), true ) || ! is_int( $pending['deadline'] ) || $pending['deadline'] < time() || strlen( wp_json_encode( $pending ) ) > 262144 ) ) {
+		if ( $pending && ( ! is_array( $pending ) || ! isset( $pending['id'], $pending['phase'], $pending['deadline'], $pending['payload'] ) || ! is_string( $pending['id'] ) || ! wp_is_uuid( $pending['id'], 4 ) || ! in_array( $pending['phase'], array( 'source', 'destination' ), true ) || ! is_int( $pending['deadline'] ) || $pending['deadline'] < time() || strlen( wp_json_encode( $pending ) ) > 1572864 ) ) {
 			unset( $state['transfer_report'] ); if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not clear expired transfer preparation.' ); } $pending = null;
 		}
 		if ( ! $pending ) {
@@ -23,7 +23,12 @@ function agent_prepare_transfer() {
 			if ( ! is_array( $task ) || ! isset( $task['id'], $task['phase'], $task['deadline'], $task['names'] ) || ! is_string( $task['id'] ) || ! wp_is_uuid( $task['id'], 4 ) || ! in_array( $task['phase'], array( 'source', 'destination' ), true ) || ! is_string( $task['deadline'] ) || ! is_array( $task['names'] ) || count( $task['names'] ) > 7 ) { return new \WP_Error( 'sunrise_transfer_response', 'Invalid transfer task.' ); }
 			$deadline = strtotime( $task['deadline'] );
 			if ( false === $deadline || $deadline <= time() || $deadline > time() + 73 * HOUR_IN_SECONDS ) { return new \WP_Error( 'sunrise_transfer_expired', 'Transfer task expired or has an invalid deadline.' ); }
-			$payload = 'source' === $task['phase'] ? transfer_option_snapshot( $task['names'] ) : transfer_option_preview( isset( $task['snapshot'] ) ? $task['snapshot'] : null );
+			if ( isset( $task['file_selection'] ) ) {
+				require_once __DIR__ . '/agent-file-transfers.php';
+				$payload = 'source' === $task['phase'] ? agent_file_source( $task ) : transfer_file_preview( $task['snapshot'] ?? null );
+				if ( false === $payload ) { agent_file_continue(); return false; }
+				if ( is_wp_error( $payload ) && 'sunrise_agent_http' === $payload->get_error_code() ) { return $payload; }
+			} else { $payload = 'source' === $task['phase'] ? transfer_option_snapshot( $task['names'] ) : transfer_option_preview( isset( $task['snapshot'] ) ? $task['snapshot'] : null ); }
 			if ( is_wp_error( $payload ) ) { $payload = array( 'error' => 'preparation_failed' ); }
 			if ( false === wp_json_encode( $payload ) ) { $payload = array( 'error' => 'preparation_failed' ); }
 			$pending = array( 'id' => $task['id'], 'phase' => $task['phase'], 'deadline' => $deadline, 'payload' => $payload );
@@ -37,6 +42,7 @@ function agent_prepare_transfer() {
 			return $result;
 		}
 		if ( empty( $result['transfer']['accepted'] ) || true !== $result['transfer']['accepted'] ) { return new \WP_Error( 'sunrise_transfer_response', 'Invalid transfer receipt.' ); }
+		if ( 'source' === $pending['phase'] && ( $pending['payload']['scope'] ?? '' ) === 'files' ) { require_once __DIR__ . '/transfer-files.php'; $archive = transfer_file_workspace( $pending['id'] ) . '/source.zip'; if ( is_file( $archive ) ) { unlink( $archive ); } }
 		unset( $state['transfer_report'] );
 		$state['last_transfer_preparation'] = array( 'id' => $pending['id'], 'phase' => $pending['phase'], 'at' => time(), 'failed' => isset( $pending['payload']['error'] ) );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist transfer receipt.' ); }

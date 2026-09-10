@@ -110,6 +110,7 @@ function managed_network_page( $view ) {
 	if ( 'migrations' === $view ) {
 		require_once __DIR__ . '/migrations.php'; migration_workbench_page();
 		require_once __DIR__ . '/transfer-options.php'; transfer_recovery_page();
+		require_once __DIR__ . '/transfer-files.php'; transfer_file_recovery_page();
 		return;
 	}
 	require_once __DIR__ . '/dashboard.php'; dashboard_page();

@@ -217,3 +217,12 @@ To release: update `Version` and `VERSION` in sunrise.php, `Stable tag` and the 
 ### Sunrise self-updates
 
 From 0.2.3, packaged Sunrise installations select their own published GitHub releases for WordPress's native automatic updater even when the network's plugin policy is off. Other plugins are unaffected. Host restrictions, disabled offers, filesystem checks and cron availability still apply. Symlinked installations and Git checkouts are excluded to protect development work. Existing installations need the 0.2.3 update once to gain this behavior.
+
+
+### File migration pilot (0.2.8)
+
+The WordPress workbench supports all/active/include/exclude plugin and theme files and all/date/last-success media files. Source and destination approvals bind the exact manifest. Source ZIPs and destination staging/recovery copies stay outside public document roots; transport uses 256 KiB chunks through the private Control relay. Hosts must provide ZipArchive, private writable temporary storage and the required native file permissions. Active plugin/theme state, attachment records, licenses and database content are not changed by a file-only transfer.
+
+The initial transfer ceiling is 5,000 files, 10,000 walked entries, 512 MiB. Media checkpoints advance only after a confirmed successful transfer for the same source/destination pair. Files are added/replaced, not mirrored/deleted. Original destination files can be restored locally while hashes still match; ambiguous interrupted writes remain fenced. Completed private copies expire after seven days during subsequent plugin activity. This is not full database or posts migration support.
+
+Checks: `wp --user=1 eval-file tests/transfer-files-check.php`, `tests/agent-transfer-execution-check.php`, and Control's `node --experimental-strip-types tests/cove-file-transfer-check.mjs` on disposable Cove fixtures. The workbench browser check covers native login, real source inventory, saved selections, exact approval handoff and mobile layout. No live-host compatibility certification is implied.

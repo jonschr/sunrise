@@ -15,13 +15,14 @@ function permission( $request = null ) {
 
 function register_routes() {
 	register_rest_route( 'sunrise/v1', '/dashboard', array( 'methods' => 'POST', 'callback' => function ( $request ) { require_once __DIR__ . '/dashboard.php'; return dashboard_request( $request ); }, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
-	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/sync' => array( 'POST' ) ) as $path => $methods ) {
+	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/catalog' => array( 'GET' ), '/sync' => array( 'POST' ) ) as $path => $methods ) {
 		register_rest_route( 'sunrise/v1', '/transfers/workbench' . $path, array( 'methods' => $methods, 'callback' => function ( $request ) use ( $path ) {
 			require_once __DIR__ . '/migrations.php'; $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
 			if ( '/status' === $path ) { return migration_status(); }
+			if ( '/catalog' === $path ) { return migration_file_catalog( $request->get_param( 'site' ), $request->get_param( 'after' ) ); }
 			if ( '/sync' === $path ) { return migration_sync(); }
 			if ( 'GET' === $request->get_method() ) { return migration_draft(); }
-			if ( strlen( $request->get_body() ) > 4096 ) { return new \WP_Error( 'sunrise_migration_size', 'Selection too large.', array( 'status' => 413 ) ); }
+			if ( strlen( $request->get_body() ) > 16384 ) { return new \WP_Error( 'sunrise_migration_size', 'Selection too large.', array( 'status' => 413 ) ); }
 			return save_migration_draft( $request->get_json_params() );
 		}, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	}

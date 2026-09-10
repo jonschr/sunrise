@@ -2,6 +2,16 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.8 — 2026-09-09
+
+- Implement plugin and theme file selection: all, active, selected, or all except selected. Include active parent themes and exclude Sunrise itself.
+- Transfer media files since the last successful transfer, since a UTC date, or all files. Hash checkpoints detect changed files even when timestamps are backdated. Attachment records still require the upcoming database/content handler.
+- Freeze private ZIP archives and resume bounded, authenticated uploads/downloads through a compatible Control service. Require both exact transfer approvals before downloading to the destination.
+- Verify archive and file hashes, protect destination edits, reject unsafe paths/symlinks and executable uploads, and honor host file-modification controls. Retain destination installation identity and administrator connections.
+- Add per-owner file recovery, seven-day cleanup for completed copies, progress reporting, and bounded continuation jobs. Interrupted writes remain fenced; invalid downloads report failure without writing.
+- Fix catalog requests on sites using plain permalinks and save migration preferences immediately.
+- Pilot limits: ZipArchive and private temporary storage required; at most 5,000 files, 10,000 scanned entries and 512 MiB per transfer. Posts, full databases and arbitrary tables remain in development.
+
 ## 0.2.7 — 2026-09-09
 
 - Bring network-wide updates, failures, site details, activity and automatic-update policies into WordPress using the shared Control dashboard.

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Sunrise
  * Description: Authenticated update inventory, automatic-update policies, and remote update jobs.
- * Version: 0.2.7
+ * Version: 0.2.8
  * Plugin URI: https://github.com/jonschr/sunrise
  * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
@@ -16,7 +16,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.2.7';
+const VERSION = '0.2.8';
 
 // Discard old cached WordPress.org collisions before the GitHub checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {
@@ -42,6 +42,12 @@ require_once __DIR__ . '/includes/policy.php';
 require_once __DIR__ . '/includes/agent.php';
 require_once __DIR__ . '/includes/errors.php';
 require_once __DIR__ . '/includes/update-failures.php';
+
+add_action( 'sunrise_transfer_continue', function ( $owner ) {
+	$previous = get_current_user_id(); wp_set_current_user( (int) $owner );
+	try { require_once __DIR__ . '/includes/migrations.php'; migration_sync(); }
+	finally { wp_set_current_user( $previous ); }
+} );
 
 add_action( 'deleted_user', function ( $user_id ) {
 	delete_option( 'sunrise_error_ack_' . $user_id );
@@ -69,6 +75,7 @@ if ( is_admin() && file_exists( __DIR__ . '/includes/admin.php' ) ) {
 register_deactivation_hook( __FILE__, function () {
 	delete_option( 'sunrise_agent_interval' );
 	wp_unschedule_hook( 'sunrise_check_in' );
+	wp_unschedule_hook( 'sunrise_transfer_continue' );
 	foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) {
 		wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) );
 		$job = get_option( 'sunrise_job_' . $id );

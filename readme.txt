@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.2.7
+Stable tag: 0.2.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,11 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.2.8 =
+* Add selected/all/active/excluded plugin and theme file transfers, and incremental media files.
+* Use private resumable archives, exact pair approvals, hash checks, destination recovery and live progress.
+* File transfers require compatible Control storage, ZipArchive and private temporary storage; database/content handlers are still in development.
 
 = 0.2.2 =
 * Use a thirty-minute routine check-in interval for testing and reschedule existing connections on upgrade.
