@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.13 — 2026-09-10
+
+- Read the installed WordPress core version from the replaced core files after a successful update, instead of reporting the stale version loaded at the start of the request.
+- Prevent a completed core update from briefly reappearing in Control's available updates while the same agent process reports its result.
+
 ## 0.2.12 — 2026-09-10
 
 - Treat a connection revoked by Control as disconnected: stop scheduled check-ins, remote policy, network dashboard access and error reporting until an administrator reconnects.

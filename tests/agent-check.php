@@ -22,6 +22,11 @@ $reply = function ( $pre, $args ) use ( &$reports, $mock_wire ) {
 	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 };
 try {
+	$loaded_wp_version = $GLOBALS['wp_version'];
+	$fresh_wp_version = ( static function () { require ABSPATH . WPINC . '/version.php'; return $wp_version; } )();
+	$GLOBALS['wp_version'] = '0.0-test-stale';
+	try { $reported_wp_version = Sunrise\agent_inventory()[0]['version']; } finally { $GLOBALS['wp_version'] = $loaded_wp_version; }
+	sunrise_agent_assert( $fresh_wp_version === $reported_wp_version, 'Post-update inventory reads the installed core files instead of stale request globals' );
 	$other_admin = wp_insert_user( array( 'user_login' => 'sunrise-owner-test-' . wp_generate_password( 12, false ), 'user_pass' => wp_generate_password( 40 ), 'role' => 'administrator' ) );
 	if ( is_wp_error( $other_admin ) ) { throw new RuntimeException( 'Could not create the ownership fixture' ); }
 	wp_set_current_user( $other_admin );

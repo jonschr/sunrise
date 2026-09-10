@@ -105,13 +105,14 @@ function offer_summary( $offer ) {
 }
 
 function inventory() {
-	global $wp_db_version;
 	require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	require_once ABSPATH . 'wp-admin/includes/update.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-automatic-updater.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	$core    = get_site_transient( 'update_core' );
-	$version = get_bloginfo( 'version' );
+	// Core updates replace this file while the loaded globals remain stale for the rest of the request.
+	$core_files = ( static function () { require ABSPATH . WPINC . '/version.php'; return array( 'version' => $wp_version, 'db_version' => $wp_db_version ); } )();
+	$version = $core_files['version'];
 	$offers  = array();
 	$auto_disabled = ( new \WP_Automatic_Updater() )->is_disabled();
 	foreach ( isset( $core->updates ) ? $core->updates : array() as $offer ) {
@@ -140,7 +141,7 @@ function inventory() {
 			'next_native_checks' => array( 'core' => wp_next_scheduled( 'wp_version_check' ), 'plugins' => wp_next_scheduled( 'wp_update_plugins' ), 'themes' => wp_next_scheduled( 'wp_update_themes' ) ),
 			'remote_job_runner' => true,
 		),
-		'core' => array( 'version' => $version, 'database_upgrade_required' => (int) get_option( 'db_version' ) !== (int) $wp_db_version, 'update_available' => $offers ? true : ( $core_known ? false : null ), 'updates' => $offers, 'last_check_attempt' => isset( $core->last_checked ) ? $core->last_checked : null ),
+		'core' => array( 'version' => $version, 'database_upgrade_required' => (int) get_option( 'db_version' ) !== (int) $core_files['db_version'], 'update_available' => $offers ? true : ( $core_known ? false : null ), 'updates' => $offers, 'last_check_attempt' => isset( $core->last_checked ) ? $core->last_checked : null ),
 		'plugins' => array(), 'themes' => array(), 'must_use_plugins' => array(), 'dropins' => array(),
 	);
 	foreach ( array( 'plugins' => get_plugins(), 'themes' => wp_get_themes() ) as $type => $items ) {
