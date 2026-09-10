@@ -144,7 +144,7 @@ The last flag is only needed for a self-signed local certificate. This check exp
 
 Flywheel, WP Engine, and SiteDistrict are **target environments, not yet certified integrations**. Validate on staging at each host: credential/Authorization handling, WAF/User-Agent behavior, cache bypass, 429 handling, loopbacks, writable files, core restrictions, premium updates, and native auto-update behavior. Firewalls can reject a request before any plugin code executes. Host restrictions are surfaced rather than bypassed.
 
-The central-service agent pushes inventory outbound about every five minutes through WP-Cron; manual **Sync with Sunrise Control**, CLI sync, and authenticated wake requests remain available. Newly delivered policies are acknowledged in the same synchronization. The WordPress panel reads local state on load; opening Sunrise Control reads the central API’s stored network reports. Local/private sites can report without accepting inbound requests, but must be running with working cron. See [Sunrise Control README](</Users/jonschroeder/Local Sites/Sunrise Control/README.md>) for the local pilot configuration and its limitations.
+The central-service agent pushes inventory outbound about every five minutes through WP-Cron; manual **Sync with Sunrise Control**, CLI sync, and authenticated wake requests remain available. A new connection reports its current update inventory immediately after approval while the initiating WordPress tab is open. Newly delivered policies are acknowledged in the same synchronization. The WordPress panel reads local state on load; opening Sunrise Control reads the central API’s stored network reports. Local/private sites can report without accepting inbound requests, but must be running with working cron. See [Sunrise Control README](</Users/jonschroeder/Local Sites/Sunrise Control/README.md>) for the local pilot configuration and its limitations.
 
 ## Central installation pilot
 
@@ -207,7 +207,7 @@ Central network batches reuse the same exact-version native update runner. After
 
 ## Plugin releases
 
-Install **sunrise.zip** from [GitHub Releases](https://github.com/jonschr/sunrise/releases). For the SiteDistrict pilot, activate Sunrise and use **Connect this site** as the owning administrator. The staging Control URL is built in; no wp-config.php changes are required. Local settings and connected-site credentials are never bundled in the ZIP.
+Install **sunrise.zip** from [GitHub Releases](https://github.com/jonschr/sunrise/releases). For the SiteDistrict pilot, activate Sunrise and use the **Connect this site** notice as the owning administrator. A signed-in Control account with one eligible network completes without another click; multiple eligible networks retain the reviewed network choice. The staging Control URL is built in; no wp-config.php changes are required. Local settings and connected-site credentials are never bundled in the ZIP.
 
 Sunrise bundles the same Plugin Update Checker library used by legacy RentFetch, updated to upstream v5.7. It checks published releases approximately every twelve hours and provides the native Plugins-page **Check for updates** link. Only a published, non-draft, non-prerelease GitHub release with a `sunrise.zip` asset is eligible; there is no fallback to main, bare tags, or source archives. Sites need no GitHub credentials. The separate `Update URI` and early cache filter prevent the WordPress.org name collision while allowing the GitHub offer to appear.
 

@@ -112,13 +112,13 @@ function agent_http( $path, $data, $state, $method = 'POST' ) {
 	return $body;
 }
 
-function agent_enroll() {
+function agent_enroll( $intent = null ) {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
-	try { return agent_enroll_locked(); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
+	try { return agent_enroll_locked( $intent ); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
-function agent_enroll_locked() {
+function agent_enroll_locked( $intent = null ) {
 	if ( ! agent_url() || ! current_user_can( 'manage_options' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'Administrator access and a trusted SUNRISE_CONTROL_URL are required.' ); }
 	$access = agent_access( true ); if ( is_wp_error( $access ) ) { return $access; }
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
@@ -139,7 +139,9 @@ function agent_enroll_locked() {
 	if ( (int) $state['user_id'] !== get_current_user_id() ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator must finish or disconnect this enrollment.' ); }
 	if ( empty( $state['site_id'] ) ) {
 		$previous = $state;
-		$result = agent_http( 'enrollments', array( 'credential_digest' => $state['digest'], 'url' => $state['url'], 'local_user_id' => $state['user_id'], 'environment' => wp_get_environment_type() ), $state );
+		$request = array( 'credential_digest' => $state['digest'], 'url' => $state['url'], 'local_user_id' => $state['user_id'], 'environment' => wp_get_environment_type() );
+		if ( is_string( $intent ) && preg_match( '/^[a-f0-9]{64}$/D', $intent ) ) { $request['intent_digest'] = hash( 'sha256', $intent ); }
+		$result = agent_http( 'enrollments', $request, $state );
 		if ( is_wp_error( $result ) ) { return $result; }
 		$state['enrollment_id'] = $result['id'];
 		$state['approval_url'] = $result['approval_url'];
@@ -147,7 +149,7 @@ function agent_enroll_locked() {
 		if ( $previous !== $state && ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist enrollment.' ); }
 	}
 	agent_schedule( 60 );
-	return array( 'approval_url' => $state['approval_url'], 'phrase' => $state['phrase'] );
+	return array( 'approval_url' => $intent ? add_query_arg( 'intent', $intent, $state['approval_url'] ) : $state['approval_url'], 'phrase' => $state['phrase'] );
 }
 
 function agent_schedule( $delay, $user_id = null ) {

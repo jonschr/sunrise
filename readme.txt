@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.2.15
+Stable tag: 0.2.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,8 +13,8 @@ Private WordPress update inventory, policies, remote jobs, and an optional WordP
 Upload sunrise.zip through Plugins > Add New > Upload Plugin, then activate Sunrise.
 Sunrise connects to https://sunrise-staging.elod.in by default. No wp-config.php change is needed.
 
-Open Sunrise as the administrator who will own the connection, choose Connect this site,
-and approve the connection in Sunrise Control. Return to WordPress to finish and sync.
+Choose Connect this site from the WordPress notice or Sunrise page. When your signed-in
+Sunrise account has one eligible network, the connection and first update report finish automatically.
 Sunrise keeps itself updated through the native WordPress automatic updater, independently of network plugin policies. Other plugins retain their existing settings. No credential is generated on activation.
 
 == Requirements ==
@@ -25,6 +25,10 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.2.16 =
+* Offer connection from every WordPress admin page and send the first update report immediately after approval.
+* Remove the redundant Sunrise page header and present unconnected sites in a compact setup card.
 
 = 0.2.15 =
 * Complete WordPress's database upgrade after a remote core update, including local HTTPS test sites.

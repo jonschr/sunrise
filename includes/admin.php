@@ -12,6 +12,10 @@ add_action( 'admin_menu', function () {
 add_action( 'admin_enqueue_scripts', function ( $hook ) {
 	$icon = esc_url( plugins_url( '../assets/icon.svg', __FILE__ ) );
 	wp_add_inline_style( 'common', '#adminmenu #toplevel_page_sunrise .wp-menu-image:before{content:"";display:block;width:20px;height:20px;padding:0;margin:7px auto;background-color:currentColor;-webkit-mask:url("' . $icon . '") center/contain no-repeat;mask:url("' . $icon . '") center/contain no-repeat}' );
+	if ( agent_connection_needed() ) {
+		wp_enqueue_script( 'sunrise-connect', plugins_url( '../assets/connect.js', __FILE__ ), array(), VERSION, true );
+		wp_localize_script( 'sunrise-connect', 'sunriseConnect', array( 'enroll' => rest_url( 'sunrise/v1/agent/connect' ), 'sync' => rest_url( 'sunrise/v1/agent/check-in' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) );
+	}
 	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		foreach ( array( 'admin_notices', 'all_admin_notices', 'network_admin_notices' ) as $notice_hook ) { remove_all_actions( $notice_hook ); }
@@ -32,6 +36,22 @@ function admin_load() {
 	require_once __DIR__ . '/jobs.php';
 	require_once __DIR__ . '/controller.php';
 }
+
+function agent_connection_needed() {
+	$state = agent_state();
+	return current_user_can( 'manage_options' ) && current_user_can( 'update_plugins' ) && current_user_can( 'update_themes' ) && current_user_can( 'update_core' ) && agent_url() && ( ! $state || empty( $state['site_id'] ) || ! empty( $state['revoked'] ) ) && ! is_wp_error( installation_guard() );
+}
+
+function connection_form() {
+	form_start( 'local', 'agent_enroll' );
+	echo '<button type="submit" class="button button-primary">' . esc_html__( 'Connect this site', 'sunrise' ) . '</button> <span class="sunrise-connect-status" role="status" aria-live="polite"></span></form>';
+}
+
+add_action( 'admin_notices', function () {
+	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || in_array( get_current_screen()->id, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) { return; }
+	echo '<div class="notice notice-info"><p><strong>' . esc_html__( 'Connect this site to Sunrise', 'sunrise' ) . '</strong></p><p>' . esc_html__( 'Send this site’s update status to your Sunrise network and manage its updates there.', 'sunrise' ) . '</p>';
+	connection_form(); echo '<p></p></div>';
+} );
 
 function admin_request( $site, $path, $method = 'GET', $body = null ) {
 	if ( 'local' !== $site ) {
@@ -169,20 +189,20 @@ function admin_page( $view = 'network' ) {
 	admin_load();
 	$site = isset( $_GET['site'] ) && is_string( $_GET['site'] ) ? sanitize_key( wp_unslash( $_GET['site'] ) ) : 'overview';
 	echo '<div class="wrap sunrise-wrap"><h1>' . esc_html( 'migrations' === $view ? __( 'Sunrise Migrations', 'sunrise' ) : __( 'Sunrise Network', 'sunrise' ) ) . '</h1>';
-	echo '<header class="sunrise-shell-header"><strong>Sunrise</strong><nav><a href="' . esc_url( admin_url( 'admin.php?page=sunrise' ) ) . '">Updates</a><a href="' . esc_url( admin_url( 'admin.php?page=sunrise-migrations' ) ) . '">Migrations</a></nav><div>' ;
-	if ( agent_dashboard_url() ) { echo '<a href="' . esc_url( add_query_arg( 'view', 'administration', agent_dashboard_url() ) ) . '">Administration ↗</a> '; }
-	echo '<button type="button" class="button" data-sunrise-dialog="sunrise-site-settings">Site settings</button></div></header><dialog id="sunrise-site-settings"><form method="dialog"><button class="button">Close</button></form><h2>Site settings</h2></dialog>';
 	$notice = get_transient( 'sunrise_notice_' . get_current_user_id() );
 	if ( $notice ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
 	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! is_wp_error( installation_guard() ) ) {
-		echo '<h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to manage the network. Until connected, Sunrise sends no inventory or error reports. Its own update checker remains active.', 'sunrise' ) . '</p>';
+		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Until connected, Sunrise sends no inventory or error reports.', 'sunrise' ) . '</p>';
 		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
-		form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect this site', 'sunrise' ), 'primary', 'submit', false ); echo '</form></div>';
+		connection_form(); echo '</section></div>';
 		return;
 	}
+	echo '<div class="sunrise-site-tools">';
+	if ( agent_dashboard_url() ) { echo '<a href="' . esc_url( add_query_arg( 'view', 'administration', agent_dashboard_url() ) ) . '">' . esc_html__( 'Administration ↗', 'sunrise' ) . '</a>'; }
+	echo '<button type="button" class="button" data-sunrise-dialog="sunrise-site-settings">' . esc_html__( 'Site settings', 'sunrise' ) . '</button></div><dialog id="sunrise-site-settings"><form method="dialog"><button class="button">' . esc_html__( 'Close', 'sunrise' ) . '</button></form><h2>' . esc_html__( 'Site settings', 'sunrise' ) . '</h2></dialog>';
 	$identity = installation_identity();
 	$identity_error = installation_guard();
 	$anchor_id = installation_anchor();

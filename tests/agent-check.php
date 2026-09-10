@@ -37,7 +37,7 @@ try {
 	}
 	require_once WP_PLUGIN_DIR . '/sunrise/includes/admin.php';
 	ob_start(); Sunrise\admin_page(); $html = ob_get_clean();
-	sunrise_agent_assert( false !== strpos( $html, 'Connect this site' ) && false === strpos( $html, 'agent_sync' ) && false === strpos( $html, 'Open Sunrise Control' ) && false === strpos( $html, $state['site_id'] ) && false === strpos( $html, $state['phrase'] ), 'Other administrator sees only the connection page, without owner details or controls' );
+	sunrise_agent_assert( false !== strpos( $html, 'sunrise-connect-card' ) && false !== strpos( $html, 'Connect this site' ) && false === strpos( $html, 'sunrise-shell-header' ) && false === strpos( $html, 'agent_sync' ) && false === strpos( $html, 'Open Sunrise Control' ) && false === strpos( $html, $state['site_id'] ) && false === strpos( $html, $state['phrase'] ), 'Other administrator sees the clean connection page, without owner details or controls' );
 	sunrise_agent_assert( false === Sunrise\agent_dashboard_url(), 'Another administrator cannot obtain the owner network navigation hint' );
 	wp_set_current_user( $original_user );
 	sunrise_agent_assert( true === Sunrise\agent_access(), 'The enrolling administrator retains connection access' );

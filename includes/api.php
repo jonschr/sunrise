@@ -13,7 +13,17 @@ function permission( $request = null ) {
 	return agent_access();
 }
 
+function enrollment_permission() {
+	if ( ! is_ssl() && 'local' !== wp_get_environment_type() ) { return new \WP_Error( 'sunrise_https_required', __( 'HTTPS is required outside an explicitly local environment.', 'sunrise' ), array( 'status' => 403 ) ); }
+	if ( ! current_user_can( 'manage_options' ) || ! current_user_can( 'update_plugins' ) || ! current_user_can( 'update_themes' ) || ! current_user_can( 'update_core' ) ) {
+		return new \WP_Error( 'sunrise_forbidden', __( 'An administrator with update access is required.', 'sunrise' ), array( 'status' => is_user_logged_in() ? 403 : 401 ) );
+	}
+	$access = agent_access( true ); if ( is_wp_error( $access ) ) { return $access; }
+	return installation_guard();
+}
+
 function register_routes() {
+	register_rest_route( 'sunrise/v1', '/agent/connect', array( 'methods' => 'POST', 'callback' => function () { return agent_enroll( bin2hex( random_bytes( 32 ) ) ); }, 'permission_callback' => __NAMESPACE__ . '\\enrollment_permission' ) );
 	register_rest_route( 'sunrise/v1', '/wake', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_wake', 'permission_callback' => __NAMESPACE__ . '\\agent_wake_permission' ) );
 	register_rest_route( 'sunrise/v1', '/dashboard', array( 'methods' => 'POST', 'callback' => function ( $request ) { require_once __DIR__ . '/dashboard.php'; return dashboard_request( $request ); }, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/catalog' => array( 'GET' ), '/peers' => array( 'GET' ), '/sync' => array( 'POST' ) ) as $path => $methods ) {

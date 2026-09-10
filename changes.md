@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.16 — 2026-09-10
+
+- Offer a one-click connection from every WordPress administration page. Open the approval in a new tab, poll only while it is pending, and send the full update inventory immediately after approval instead of waiting for routine cron.
+- Remove the redundant white Sunrise header and give an unconnected installation a compact setup card. Keep the existing reviewed approval and cron path as fallbacks.
+
 ## 0.2.15 — 2026-09-10
 
 - Complete WordPress's native database upgrade through a fresh loopback request after replacing core files, with a local-only certificate exception for HTTPS development sites.
