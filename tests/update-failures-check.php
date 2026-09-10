@@ -7,8 +7,13 @@ try {
  $item = (object) array( 'plugin' => 'fixture/fixture.php', 'new_version' => '2.0' );
  $result = (object) array( 'item' => $item, 'result' => new WP_Error( 'download_failed', 'License expired: secret-key https://provider.test/?key=secret' ) );
  require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
+ require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
  $check( 'license_required' === Sunrise\agent_job_failure_code( $result->result ), 'Central jobs must report a safe specific reason' );
  $check( 'sunrise_database_upgrade_pending' === Sunrise\agent_job_failure_code( new WP_Error( 'sunrise_database_upgrade_pending', 'Database upgrade required.' ) ), 'Sunrise job errors must retain their specific code' );
+ $stored_db_version = get_option( 'db_version' ); $expected_db_version = (int) $stored_db_version + 1;
+ $upgrade = function () use ( $expected_db_version ) { update_option( 'db_version', $expected_db_version ); return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => '0' ); };
+ add_filter( 'pre_http_request', $upgrade );
+ try { $check( true === Sunrise\core_database_upgrade( $expected_db_version ), 'Core database upgrades use a fresh loopback request' ); } finally { remove_filter( 'pre_http_request', $upgrade ); update_option( 'db_version', $stored_db_version ); }
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  $inventory = array( array( 'type' => 'plugins', 'installed_id' => 'fixture/fixture.php', 'version' => '1.0' ) );

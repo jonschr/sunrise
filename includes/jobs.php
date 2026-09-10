@@ -7,6 +7,18 @@ function job_error( $code, $message, $status = 409 ) {
 	return new \WP_Error( 'sunrise_' . $code, $message, array( 'status' => $status ) );
 }
 
+function core_database_upgrade( $expected_version ) {
+	if ( (int) get_option( 'db_version' ) === (int) $expected_version ) { return true; }
+	$args = array( 'timeout' => 60 );
+	if ( 'local' === wp_get_environment_type() ) { $args['sslverify'] = false; }
+	$response = wp_remote_post( admin_url( 'upgrade.php?step=upgrade_db' ), $args );
+	wp_cache_flush(); wp_cache_delete( 'alloptions', 'options' );
+	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) >= 400 ) {
+		return job_error( 'database_upgrade_failed', __( 'Core files changed but WordPress could not run its database upgrade.', 'sunrise' ) );
+	}
+	return (int) get_option( 'db_version' ) === (int) $expected_version ? true : job_error( 'database_upgrade_pending', __( 'Core files changed but the database upgrade is still pending.', 'sunrise' ) );
+}
+
 function job_permission( $task, $remote = false ) {
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 	if ( ! $remote && 'refresh' !== $task['action'] && get_option( 'sunrise_remote_job_fence' ) ) { return job_error( 'execution_interrupted', 'A central installation must finish or be reconciled before further updates.' ); }
@@ -292,6 +304,11 @@ function install_update( $task ) {
 		}
 	}
 	if ( $current_version === $task['version'] ) {
+		if ( 'core' === $type ) {
+			$core_files = ( static function () { require ABSPATH . WPINC . '/version.php'; return array( 'db_version' => $wp_db_version ); } )();
+			$database = core_database_upgrade( $core_files['db_version'] );
+			if ( is_wp_error( $database ) ) { return $database; }
+		}
 		return array( 'code' => 'already_current', 'version' => $current_version );
 	}
 	if ( ! $current_version || ! $offer || ! version_compare( $task['version'], $current_version, '>' ) ) {
@@ -328,9 +345,8 @@ function install_update( $task ) {
 			return array( 'version' => $wp_version, 'db_version' => $wp_db_version );
 		} )();
 		$installed_version = $installed_core['version'];
-		if ( (int) get_option( 'db_version' ) !== (int) $installed_core['db_version'] ) {
-			return job_error( 'database_upgrade_pending', __( 'Core files changed but the database upgrade is pending. Complete the WordPress database upgrade in wp-admin.', 'sunrise' ) );
-		}
+		$database = core_database_upgrade( $installed_core['db_version'] );
+		if ( is_wp_error( $database ) ) { return $database; }
 	} elseif ( 'plugin' === $type ) {
 		wp_clean_plugins_cache( false );
 		$plugins = get_plugins();

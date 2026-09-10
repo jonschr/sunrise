@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.15 — 2026-09-10
+
+- Complete WordPress's native database upgrade through a fresh loopback request after replacing core files, with a local-only certificate exception for HTTPS development sites.
+
 ## 0.2.14 — 2026-09-10
 
 - Classify central update failures into safe, useful reasons such as license, package download, filesystem, and compatibility failures without transmitting provider messages, package URLs, or credentials.
