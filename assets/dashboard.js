@@ -10,9 +10,9 @@
   pending.add(msg.id);active++;
   try{
    const response=await fetch(cfg.api,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':cfg.nonce},body,signal:AbortSignal.timeout(22000)}),result=await response.json();
-   if(!response.ok){const message=result.data?.remote_code==='dashboard_approval_required'?'Sign in once to authorize network controls for this connection.':result.message || 'Sunrise could not load the network.';document.getElementById('sunrise-dashboard-permission').hidden=result.data?.remote_code!=='dashboard_approval_required';status.textContent=message;send({error:message});return;}
+   if(!response.ok){const code=result.data?.remote_code,message=code==='dashboard_approval_required'?'Sign in once to authorize network controls for this connection.':code || result.message || 'Sunrise could not load the network.';document.getElementById('sunrise-dashboard-permission').hidden=code!=='dashboard_approval_required';status.textContent='';send({error:message});return;}
    document.getElementById('sunrise-dashboard-permission').hidden=true;status.textContent='';send({result});
-  }catch{status.textContent='The network service is unavailable. Reload to try again.';send({error:status.textContent});}
+  }catch{status.textContent='';send({error:'service_unavailable'});}
   finally{active--;pending.delete(msg.id);}
  });
  const url=new URL(cfg.frame);url.searchParams.set('parent',location.origin);url.searchParams.set('channel',cfg.channel);frame.src=url.href;

@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.20 — 2026-09-10
+
+- Relay central service failures once through the embedded dashboard and show the branded, centered maintenance state instead of duplicate raw errors above and inside the frame.
+
 ## 0.2.19 — 2026-09-10
 
 - Give the native WordPress migration screen the same Sunrise gradient sidebar and direct Network/Migrations navigation as the rest of the managed interface.
