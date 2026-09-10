@@ -29,7 +29,7 @@ function agent_dashboard_url() {
 		if ( empty( $state[ $key ] ) || ! is_string( $state[ $key ] ) || ! wp_is_uuid( $state[ $key ], 4 ) ) { return false; }
 	}
 	$path = '/v1/accounts/' . $state['account_id'] . '/networks/' . $state['network_id'];
-	return add_query_arg( 'network', $path, agent_url() . ( 'http://127.0.0.1:8787' === agent_url() ? '/' : '/clerk' ) );
+	return add_query_arg( 'network', $path, agent_url() . '/' );
 }
 
 function agent_service_matches( $state ) {
