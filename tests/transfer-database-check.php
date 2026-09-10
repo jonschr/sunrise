@@ -2,7 +2,7 @@
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() || ! current_user_can( 'manage_options' ) ) { throw new RuntimeException( 'Disposable local administrator required.' ); }
 require_once WP_PLUGIN_DIR . '/sunrise/includes/transfer-database.php';
 $assert = function ( $v, $m ) { if ( ! $v ) { throw new RuntimeException( $m ); } };
-$conn = Sunrise\transfer_mysql(); $prefix = 'sunrise_db_test_' . substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 10 ); $table = $prefix . '_source'; $copy = $prefix . '_copy'; $id = wp_generate_uuid4(); $root = null;
+$conn = Sunrise\transfer_mysql(); $prefix = 'sunrise_db_test_' . substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 10 ); $table = $prefix . '_source'; $copy = $prefix . '_copy'; $id = wp_generate_uuid4(); $root = null; $staged = 'sunrise_import_' . substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 20 ) . '_0';
 try {
  $conn->query( "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'" );
  $conn->query( 'CREATE TABLE ' . Sunrise\database_identifier( $table ) . " (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, label VARCHAR(191) NOT NULL DEFAULT 'a\\'b', value LONGBLOB NULL, published DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY(id), KEY label_index(label(40))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=900" );
@@ -18,6 +18,17 @@ try {
  foreach ( $snapshot['tables'] as $item ) { $file = $root . '/database-' . $item['name'] . '.jsonl'; $assert( hash_file( 'sha256', $file ) === $item['sha256'] && filesize( $file ) === $item['bytes'], 'Exact snapshot bytes' ); }
  $assert( in_array( 'users', array_column( $snapshot['tables'], 'name' ), true ) && $snapshot['owner']['id'] === get_current_user_id(), 'Source users and exact owner represented' );
  $assert( Sunrise\installation_identity() === $before && Sunrise\agent_states() === $agents, 'Export leaves installation authority unchanged' );
+ $assert( Sunrise\database_manifest( $conn, $snapshot ) === $snapshot, 'Manifest validates without source SQL' );
+ $source = $snapshot; $source['site_id'] = wp_generate_uuid4(); $preview = Sunrise\database_preview( $source ); $assert( ! is_wp_error( $preview ), is_wp_error( $preview ) ? $preview->get_error_message() : 'Destination snapshot preview' );
+ $assert( $preview['authorization_required'] && $preview['read_only'] && $preview['plan']['destination']['installation_id'] === $before['id'], 'Preview binds destination identity and requires authorization' );
+ $bad = $source; $bad['db_version']++; $assert( is_wp_error( Sunrise\database_preview( $bad ) ), 'Different core database schema rejected' );
+ $file = $root . '/database-test.jsonl'; $stream = fopen( $file, 'wb' ); $stats = Sunrise\database_scan( $conn, '', $table, $schema, $stream ); fclose( $stream ); chmod( $file, 0600 );
+ $entry = array_merge( array( 'name' => 'test', 'definition' => $schema ), $stats );
+ $from = array( 'site_url' => 'https://source.example', 'home_url' => 'https://source.example', 'prefix' => 'wp_' ); $to = array( 'site_url' => 'https://destination.example', 'home_url' => 'https://destination.example', 'prefix' => 'dst_' );
+ $assert( Sunrise\database_stage_table( $conn, $staged, $entry, $file, $from, $to ) === 1, 'Private staging inserts verified rows' );
+ $row = $conn->query( 'SELECT * FROM ' . Sunrise\database_identifier( $staged ) )->fetch_assoc(); $assert( (string) $row['id'] === '0' && $row['label'] === 'https://destination.example/quoted' && $row['value'] === $value, 'URLs rewritten, zero identifiers and binary values retained' ); $conn->query( 'DROP TABLE ' . Sunrise\database_identifier( $staged ) );
+ $entry['rows']++; try { Sunrise\database_stage_table( $conn, $staged, $entry, $file, $from, $to ); throw new LogicException( 'Wrong count accepted' ); } catch ( RuntimeException $expected ) {} $assert( ! Sunrise\database_query( $conn, 'SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?', array( DB_NAME, $staged ) )->get_result()->fetch_row(), 'Failed staging removes only its private table' );
+
  foreach ( glob( $root . '/database-*.jsonl' ) as $file ) { touch( $file, time() - 8 * DAY_IN_SECONDS ); } touch( $root, time() - 8 * DAY_IN_SECONDS ); delete_user_meta( get_current_user_id(), 'sunrise_file_pruned_at' ); Sunrise\transfer_file_prune( dirname( $root ), wp_generate_uuid4() ); $assert( ! is_dir( $root ), 'Private database snapshots expire after seven days' ); $root = null;
- WP_CLI::success( 'Database schema round trip, binary rows, SQL rejection, authority exclusion and consistent private snapshot passed.' );
-} finally { $conn->query( 'DROP TABLE IF EXISTS ' . Sunrise\database_identifier( $copy ) . ',' . Sunrise\database_identifier( $table ) ); $conn->close(); if ( $root ) { foreach ( glob( $root . '/database-*.jsonl' ) as $file ) { unlink( $file ); } if ( count( scandir( $root ) ) === 2 ) { rmdir( $root ); } } }
+ WP_CLI::success( 'Database snapshot, read-only preview, verified private staging, URL rewriting, binary preservation and failure cleanup passed.' );
+} finally { $conn->query( 'DROP TABLE IF EXISTS ' . Sunrise\database_identifier( $copy ) . ',' . Sunrise\database_identifier( $table ) . ',' . Sunrise\database_identifier( $staged ) ); $conn->close(); if ( $root ) { foreach ( glob( $root . '/database-*.jsonl' ) as $file ) { unlink( $file ); } if ( count( scandir( $root ) ) === 2 ) { rmdir( $root ); } } }
