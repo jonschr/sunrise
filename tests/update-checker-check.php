@@ -22,8 +22,13 @@ try {
  sunrise_update_assert( empty( $native->response['sunrise/sunrise.php'] ) && ! $calls, 'Cached WordPress.org collision is removed without a network request' );
  $update = $checker->checkForUpdates();
  sunrise_update_assert( $update && '0.3.0' === $update->version && $asset === $update->download_url, 'Static metadata offers its exact matching release asset' );
+ $before = count( $calls ); Sunrise\plugin_update_check(); sunrise_update_assert( count( $calls ) === $before, 'Automated reports reuse Sunrise metadata for one hour' );
+ Sunrise\plugin_update_check( true ); sunrise_update_assert( count( $calls ) === $before + 1, 'Requested refresh forces a Sunrise metadata check' );
  $native = apply_filters( 'site_transient_update_plugins', $collision );
  sunrise_update_assert( $asset === $native->response['sunrise/sunrise.php']->package && '0.3.0' === $native->response['sunrise/sunrise.php']->new_version, 'Own update survives collision protection in the native WordPress update list' );
+ require_once WP_PLUGIN_DIR . '/sunrise/includes/api.php';
+ $reported = array_values( array_filter( Sunrise\inventory()['plugins'], function ( $item ) { return 'sunrise/sunrise.php' === $item['id']; } ) );
+ sunrise_update_assert( 1 === count( $reported ) && true === $reported[0]['update_available'] && '0.3.0' === $reported[0]['update']['version'], 'Automated inventory reports the same Sunrise offer shown by WordPress' );
  sunrise_update_assert( ! empty( $native->response['sunrise/sunrise.php']->icons['svg'] ) && false !== strpos( $native->response['sunrise/sunrise.php']->icons['svg'], '/assets/icon.svg' ), 'Sunrise mark is exposed as the plugin update icon' );
  $force_off = function () { return false; };
  add_filter( 'auto_update_plugin', $force_off, 19 );

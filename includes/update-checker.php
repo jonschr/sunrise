@@ -9,10 +9,16 @@ function plugin_update_checker() {
 	static $checker;
 	if ( ! $checker ) {
 		$checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-			'https://raw.githubusercontent.com/jonschr/sunrise/main/update.json', dirname( __DIR__ ) . '/sunrise.php', 'sunrise'
+			'https://raw.githubusercontent.com/jonschr/sunrise/main/update.json', dirname( __DIR__ ) . '/sunrise.php', 'sunrise', 1
 		);
 	}
 	return $checker;
+}
+
+function plugin_update_check( $force = false ) {
+	$checker = plugin_update_checker();
+	if ( $force || $checker->getUpdateState()->timeSinceLastCheck() >= HOUR_IN_SECONDS ) { return $checker->checkForUpdates(); }
+	return $checker->getUpdate();
 }
 
 // A changed manifest may only select the matching packaged release asset.

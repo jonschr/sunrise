@@ -234,6 +234,7 @@ function execute_task( $task ) {
 			return array( 'code' => 'refresh_throttled', 'next_refresh_at' => $last + 300 );
 		}
 		update_option( 'sunrise_last_refresh', time(), false );
+		plugin_update_check( true );
 		foreach ( array( 'core', 'plugins', 'themes' ) as $type ) {
 			$cached = get_site_transient( 'update_' . $type );
 			if ( is_object( $cached ) ) {

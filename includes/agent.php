@@ -371,6 +371,7 @@ function agent_check_in() {
 		}
 		// Retain the exact report before sending so a lost HTTP response can be retried safely.
 		if ( empty( $state['pending_report'] ) ) {
+			plugin_update_check();
 			$state['pending_report'] = array( 'protocol_version' => 1, 'sequence' => $state['sequence'] + 1,
 				'inventory' => agent_inventory(), 'local_pause' => ! empty( $state['paused'] ) );
 			if ( ! empty( $state['update_failures'] ) ) {
