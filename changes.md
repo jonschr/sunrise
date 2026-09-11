@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.23 — 2026-09-10
+
+- Include standard Plugin Update Checker cache entries in automated five-minute inventory reports even when the owning plugin only registers its updater in wp-admin. Package details remain on the site; Control receives only its existing safe inventory summary.
+
 ## 0.2.22 — 2026-09-10
 
 - Restore GP Premium, GenerateBlocks Pro, and Admin Columns Pro license state from write-only Control settings when the local license is invalid or a new update attempt fails. Invalid keys wait for a dashboard change; temporary provider failures retry at most hourly.

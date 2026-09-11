@@ -208,6 +208,25 @@ function agent_item_identity( $type, $id ) {
 	return $identity;
 }
 
+/** Mirror standard Plugin Update Checker cache entries even when its owner only loads in wp-admin. */
+function agent_puc_update_offers( $updates ) {
+	if ( ! is_object( $updates ) ) { return $updates; }
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	global $wpdb; $installed = get_plugins(); $changed = false;
+	$rows = $wpdb->get_col( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'external_updates-' ) . '%' ) );
+	foreach ( $rows as $row ) {
+		$state = maybe_unserialize( $row ); $offer = is_object( $state ) && isset( $state->update ) && is_object( $state->update ) ? (array) $state->update : array();
+		$id = isset( $offer['filename'] ) && is_string( $offer['filename'] ) ? $offer['filename'] : '';
+		$version = isset( $offer['version'] ) && is_string( $offer['version'] ) ? $offer['version'] : '';
+		if ( ! isset( $installed[ $id ] ) || ! isset( $state->checkedVersion ) || $installed[ $id ]['Version'] !== $state->checkedVersion || ! version_compare( $version, $state->checkedVersion, '>' ) || isset( $updates->response[ $id ] ) ) { continue; }
+		if ( ! $changed ) { $updates = clone $updates; $updates->response = isset( $updates->response ) && is_array( $updates->response ) ? $updates->response : array(); $updates->no_update = isset( $updates->no_update ) && is_array( $updates->no_update ) ? $updates->no_update : array(); $changed = true; }
+		$offer['plugin'] = $id; $offer['new_version'] = $version; $offer['package'] = isset( $offer['download_url'] ) ? $offer['download_url'] : ''; $offer['url'] = isset( $offer['homepage'] ) ? $offer['homepage'] : '';
+		$updates->response[ $id ] = (object) $offer; unset( $updates->no_update[ $id ] );
+	}
+	return $updates;
+}
+add_filter( 'site_transient_update_plugins', __NAMESPACE__ . '\\agent_puc_update_offers', 100 );
+
 function agent_inventory() {
 	require_once __DIR__ . '/api.php';
 	$data = inventory();
