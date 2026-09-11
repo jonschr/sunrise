@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.27 — 2026-09-11
+
+- Move the WordPress-only Administration and Site settings controls from the dashboard header into the Sunrise sidebar.
+
 ## 0.2.26 — 2026-09-11
 
 - Retry a configured premium plugin key once after each new update failure. An unchanged invalid result remains suppressed until another failure or dashboard key change, and temporary failures retain their one-hour backoff when nothing new happens.
