@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.29/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.30/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated update inventory, automatic-update policies, and remote update jobs.",
-    "changelog": "Check Sunrise release metadata hourly during routine Control check-ins and immediately for requested update checks."
+    "changelog": "Ignore unfamiliar future license metadata safely while retaining strict input validation."
   }
 }

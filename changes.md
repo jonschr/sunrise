@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.30 — 2026-09-11
+
+- Ignore unfamiliar future license identifiers and metadata fields without blocking check-ins; malformed identifiers remain rejected.
+
 ## 0.2.29 — 2026-09-11
 
 - Check Sunrise release metadata hourly during routine five-minute Control check-ins and immediately for requested update checks, so low-traffic sites do not depend on an administrator visiting WordPress Updates.

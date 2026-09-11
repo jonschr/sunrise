@@ -14,13 +14,13 @@ function premium_license_plugins() {
 
 function premium_license_metadata( $value ) {
 	$supported = premium_license_plugins();
-	if ( ! is_array( $value ) || count( $value ) !== 2 || ! isset( $value['revision'], $value['configured'] ) || ! is_int( $value['revision'] ) || $value['revision'] < 0 || ! is_array( $value['configured'] ) || count( $value['configured'] ) > count( $supported ) ) { return false; }
+	if ( ! is_array( $value ) || ! isset( $value['revision'], $value['configured'] ) || ! is_int( $value['revision'] ) || $value['revision'] < 0 || ! is_array( $value['configured'] ) || count( $value['configured'] ) > 100 ) { return false; }
 	$seen = array();
 	foreach ( $value['configured'] as $id ) {
-		if ( ! is_string( $id ) || ! isset( $supported[ $id ] ) || isset( $seen[ $id ] ) ) { return false; }
+		if ( ! is_string( $id ) || ! preg_match( '/^[a-z0-9][a-z0-9-]{0,79}$/D', $id ) || isset( $seen[ $id ] ) ) { return false; }
 		$seen[ $id ] = true;
 	}
-	return $value;
+	return array( 'revision' => $value['revision'], 'configured' => array_values( array_intersect( $value['configured'], array_keys( $supported ) ) ) );
 }
 
 function premium_license_valid( $id ) {

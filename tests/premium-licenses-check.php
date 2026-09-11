@@ -36,7 +36,8 @@ try {
 	$check( 'active' === get_option( 'acp_subscription_details' )['status'] && array( 'usage', 'update' ) === get_option( '_acp_access_permissions' ), 'Admin Columns Pro license state was not stored' );
 	$check( $requests[0]['body']['item_name'] === rawurlencode( 'GP Premium' ) && $requests[1]['body']['item_name'] === rawurlencode( 'GenerateBlocks Pro' ), 'EDD product names changed' );
 	$check( 'subscription-key-12345' === $requests[2]['body']['subscription_key'] && 'activate' === $requests[2]['headers']['X-AC-Command'], 'Admin Columns Pro did not receive its native License Key value' );
-	$check( false === Sunrise\premium_license_metadata( array( 'revision' => 1, 'configured' => array( 'unknown' ) ) ), 'Unsupported plugin accepted' );
+	$check( array( 'revision' => 1, 'configured' => array( 'gp-premium' ) ) === Sunrise\premium_license_metadata( array( 'revision' => 1, 'configured' => array( 'future-license', 'gp-premium' ), 'future_field' => true ) ), 'Unknown future license metadata was not safely ignored' );
+	$check( false === Sunrise\premium_license_metadata( array( 'revision' => 1, 'configured' => array( '../invalid' ) ) ), 'Malformed plugin identifier accepted' );
 	$check( false !== Sunrise\premium_license_metadata( array( 'revision' => 1, 'configured' => array_keys( Sunrise\premium_license_plugins() ) ) ), 'Supported plugin count was not updated' );
 	$last = array( 'revision' => 2, 'failure' => 'old-failure', 'status' => 'invalid', 'attempted_at' => time() );
 	$check( ! Sunrise\premium_license_attempt_required( $last, 2, 'old-failure', false ), 'An unchanged invalid key retried without a new failure' );
