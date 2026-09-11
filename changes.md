@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.25 — 2026-09-10
+
+- Read one static update manifest instead of GitHub's unauthenticated REST API, avoiding the shared-IP 60-request limit seen on SiteDistrict. Continue accepting only the exact version-matched `sunrise.zip` GitHub release asset.
+
 ## 0.2.24 — 2026-09-10
 
 - Refresh GP Premium and GenerateBlocks Pro's license-specific updater caches after successful activation, then run queued work in a fresh request so their native updaters use the restored key.

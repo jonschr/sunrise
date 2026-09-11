@@ -16,6 +16,9 @@ with zipfile.ZipFile(io.BytesIO(archive)) as source:
     version = re.search(r'^ \* Version: (\d+\.\d+\.\d+)$', main, re.M).group(1)
     if f"const VERSION = '{version}';" not in main or f'Stable tag: {version}\n' not in source.read('readme.txt').decode():
         raise SystemExit('Plugin header, VERSION and Stable tag must agree.')
+    metadata = source.read('update.json').decode()
+    if f'"version": "{version}"' not in metadata or f'/releases/download/v{version}/sunrise.zip' not in metadata:
+        raise SystemExit('Static update metadata must match the plugin version.')
     changes = source.read('changes.md').decode()
     section = re.search(r'^## ' + re.escape(version) + r'[^\n]*\n(.*?)(?=^## |\Z)', changes, re.M | re.S)
     if not section:
