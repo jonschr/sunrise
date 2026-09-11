@@ -134,6 +134,9 @@ function agent_run_update_job() {
 			else { wp_clean_themes_cache( false ); $current = wp_get_theme( $task['installed_id'] )->get( 'Version' ); }
 			if ( $current !== $task['from_version'] && $current !== $task['version'] ) { $result = job_error( 'installed_version_changed', 'The installed version changed after approval.' ); }
 			if ( 'core' !== $task['type'] && $task['identity'] != agent_item_identity( $task['type'] . 's', $task['installed_id'] ) ) { $result = job_error( 'component_identity_changed', 'The component identity changed after approval.' ); }
+			$premium = 'plugin' === $task['type'] && false !== array_search( $task['installed_id'], premium_license_plugins(), true );
+			if ( ! is_wp_error( $result ) && $premium && 'gp-premium/gp-premium.php' === $task['installed_id'] && function_exists( 'generate_premium_updater' ) && ! did_action( 'admin_init' ) ) { generate_premium_updater(); }
+			if ( ! is_wp_error( $result ) && $premium ) { delete_site_transient( 'update_plugins' ); }
 			if ( ! is_wp_error( $result ) ) { $result = install_update( $native ); }
 			$record['status'] = is_wp_error( $result ) ? 'failed' : 'succeeded';
 			$record['code'] = is_wp_error( $result ) ? agent_job_failure_code( $result ) : $result['code'];

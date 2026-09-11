@@ -55,18 +55,28 @@ function premium_license_sync( &$state, $metadata ) {
 		if ( isset( $last['revision'], $last['failure'], $last['status'] ) && $last['revision'] === $metadata['revision'] && $last['failure'] === $failure && 'success' === $last['status'] && premium_license_valid( $id ) ) { continue; }
 		$requested[] = $id;
 	}
-	if ( ! $requested ) { return true; }
+	if ( ! $requested ) { return false; }
 	$result = agent_http( 'agent/premium-licenses', array( 'revision' => $metadata['revision'], 'plugins' => $requested ), $state );
 	if ( is_wp_error( $result ) || ! premium_license_response( $result, $requested, $metadata['revision'] ) ) {
 		foreach ( $requested as $id ) { $attempts[ $id ] = array( 'revision' => $metadata['revision'], 'failure' => premium_license_failure( $id, $state ), 'status' => 'temporary', 'attempted_at' => time() ); }
-		$state['premium_license_attempts'] = $attempts; return true;
+		$state['premium_license_attempts'] = $attempts; return false;
 	}
+	$refreshed = false;
 	foreach ( $requested as $id ) {
 		$status = 'temporary';
-		if ( isset( $result['keys'][ $id ] ) ) { $activated = premium_license_activate( $id, $result['keys'][ $id ] ); $status = is_wp_error( $activated ) ? ( 'sunrise_premium_license_invalid' === $activated->get_error_code() ? 'invalid' : 'temporary' ) : 'success'; }
+		if ( isset( $result['keys'][ $id ] ) ) { $activated = premium_license_activate( $id, $result['keys'][ $id ] ); $status = is_wp_error( $activated ) ? ( 'sunrise_premium_license_invalid' === $activated->get_error_code() ? 'invalid' : 'temporary' ) : 'success'; $refreshed = $refreshed || ! is_wp_error( $activated ); }
 		$attempts[ $id ] = array( 'revision' => $metadata['revision'], 'failure' => premium_license_failure( $id, $state ), 'status' => $status, 'attempted_at' => time() );
 	}
-	$state['premium_license_attempts'] = $attempts; wp_clean_plugins_cache( false ); delete_site_transient( 'update_plugins' ); return true;
+	$state['premium_license_attempts'] = $attempts; return $refreshed;
+}
+
+function premium_license_clear_edd_cache( $id, $key ) {
+	$slug = 'gp-premium' === $id ? 'gp-premium' : 'plugin';
+	foreach ( array( false, true ) as $beta ) {
+		$hash = md5( serialize( $slug . $key . $beta ) );
+		delete_option( 'edd_sl_' . $hash ); delete_option( 'edd_api_request_' . $hash );
+	}
+	delete_option( 'edd_sl_failed_http_' . md5( trailingslashit( 'gp-premium' === $id ? 'https://generatepress.com' : 'https://generateblocks.com' ) ) );
 }
 
 function premium_license_activate( $id, $key ) {
@@ -77,9 +87,12 @@ function premium_license_activate( $id, $key ) {
 	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) < 200 || wp_remote_retrieve_response_code( $response ) >= 400 ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'License service unavailable.' ); }
 	$data = json_decode( wp_remote_retrieve_body( $response ), true );
 	if ( ! is_array( $data ) || ! isset( $data['license'] ) || ! is_string( $data['license'] ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
-	if ( $gp ) { update_option( 'gen_premium_license_key', $key ); update_option( 'gen_premium_license_key_status', sanitize_key( $data['license'] ) ); }
-	else { $saved = get_option( 'generateblocks_pro_licensing', array() ); $saved['key'] = $key; $saved['status'] = sanitize_key( $data['license'] ); update_option( 'generateblocks_pro_licensing', $saved ); }
-	return 'valid' === $data['license'] ? true : new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' );
+	$status = sanitize_key( $data['license'] );
+	if ( $gp ) { update_option( 'gen_premium_license_key', $key ); update_option( 'gen_premium_license_key_status', $status ); }
+	else { $saved = get_option( 'generateblocks_pro_licensing', array() ); $saved['key'] = $key; $saved['status'] = $status; update_option( 'generateblocks_pro_licensing', $saved ); }
+	if ( 'valid' !== $status ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' ); }
+	premium_license_clear_edd_cache( $id, $key );
+	return true;
 }
 
 function premium_license_acp_request( $command, $body, $version ) {

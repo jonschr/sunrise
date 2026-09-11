@@ -2,7 +2,9 @@
 defined( 'ABSPATH' ) || exit;
 
 $check = function ( $condition, $message ) { if ( ! $condition ) { throw new RuntimeException( $message ); } };
-$names = array( 'gen_premium_license_key', 'gen_premium_license_key_status', 'generateblocks_pro_licensing', 'acp_activation_key', '_acp_access_permissions', 'acp_subscription_details', 'acp_subscription_details_key', 'acp_subscription_key', 'acp_update_plugins_data' );
+$names = array( 'gen_premium_license_key', 'gen_premium_license_key_status', 'generateblocks_pro_licensing', 'acp_activation_key', '_acp_access_permissions', 'acp_subscription_details', 'acp_subscription_details_key', 'acp_subscription_key', 'acp_update_plugins_data', 'sunrise_test_unrelated_edd_cache' );
+$cache_names = array(); foreach ( array( 'gp-premiumgp-key_123', 'plugingb-key_123' ) as $value ) { foreach ( array( false, true ) as $beta ) { $hash = md5( serialize( $value . $beta ) ); $cache_names[] = 'edd_sl_' . $hash; $cache_names[] = 'edd_api_request_' . $hash; } }
+$cache_names[] = 'edd_sl_failed_http_' . md5( trailingslashit( 'https://generatepress.com' ) ); $cache_names[] = 'edd_sl_failed_http_' . md5( trailingslashit( 'https://generateblocks.com' ) ); $names = array_merge( $names, $cache_names );
 $saved = array(); foreach ( $names as $name ) { $saved[ $name ] = get_option( $name, null ); }
 $requests = array(); $mock = function ( $pre, $args, $url ) use ( &$requests ) {
 	$requests[] = array( 'url' => $url, 'body' => $args['body'], 'headers' => isset( $args['headers'] ) ? $args['headers'] : array() ); $body = $args['body'];
@@ -15,10 +17,13 @@ $requests = array(); $mock = function ( $pre, $args, $url ) use ( &$requests ) {
 add_filter( 'pre_http_request', $mock, 10, 3 );
 try {
 	foreach ( $names as $name ) { delete_option( $name ); }
+	foreach ( $cache_names as $name ) { update_option( $name, array( 'stale' => true ), false ); } update_option( 'sunrise_test_unrelated_edd_cache', array( 'keep' => true ), false );
 	$check( true === Sunrise\premium_license_activate( 'gp-premium', ' GP-Key_123 ' ), 'GP Premium activation failed' );
 	$check( 'gp-key_123' === get_option( 'gen_premium_license_key' ) && 'valid' === get_option( 'gen_premium_license_key_status' ), 'GP Premium native options were not used' );
 	$check( true === Sunrise\premium_license_activate( 'generateblocks-pro', ' GB-Key_123 ' ), 'GenerateBlocks Pro activation failed' );
 	$check( array( 'key' => 'gb-key_123', 'status' => 'valid' ) === get_option( 'generateblocks_pro_licensing' ), 'GenerateBlocks Pro native option was not used' );
+	foreach ( $cache_names as $name ) { $check( false === get_option( $name ), 'Stale EDD updater cache was not cleared' ); }
+	$check( array( 'keep' => true ) === get_option( 'sunrise_test_unrelated_edd_cache' ), 'Unrelated updater cache was changed' );
 	$check( true === Sunrise\premium_license_activate( 'admin-columns-pro', 'subscription-key-12345' ), 'Admin Columns Pro activation failed' );
 	$check( 'activation-key-12345' === get_option( 'acp_activation_key' ) && 'activation-key-12345' === get_option( 'acp_subscription_details_key' ), 'Admin Columns Pro activation options were not used' );
 	$check( 'active' === get_option( 'acp_subscription_details' )['status'] && array( 'usage', 'update' ) === get_option( '_acp_access_permissions' ), 'Admin Columns Pro license state was not stored' );

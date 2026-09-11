@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.24 — 2026-09-10
+
+- Refresh GP Premium and GenerateBlocks Pro's license-specific updater caches after successful activation, then run queued work in a fresh request so their native updaters use the restored key.
+- Stop clearing WordPress's shared plugin-update cache during license retries, which could temporarily hide unrelated third-party updates.
+
 ## 0.2.23 — 2026-09-10
 
 - Include standard Plugin Update Checker cache entries in automated five-minute inventory reports even when the owning plugin only registers its updater in wp-admin. Package details remain on the site; Control receives only its existing safe inventory summary.
