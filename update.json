@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.25/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.26/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated update inventory, automatic-update policies, and remote update jobs.",
-    "changelog": "Avoid GitHub REST API rate limits by reading static release metadata."
+    "changelog": "Retry a configured premium plugin key once after each new update failure."
   }
 }

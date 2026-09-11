@@ -30,6 +30,9 @@ try {
 	$check( $requests[0]['body']['item_name'] === rawurlencode( 'GP Premium' ) && $requests[1]['body']['item_name'] === rawurlencode( 'GenerateBlocks Pro' ), 'EDD product names changed' );
 	$check( 'subscription-key-12345' === $requests[2]['body']['subscription_key'] && 'activate' === $requests[2]['headers']['X-AC-Command'], 'Admin Columns Pro did not receive its native License Key value' );
 	$check( false === Sunrise\premium_license_metadata( array( 'revision' => 1, 'configured' => array( 'unknown' ) ) ), 'Unsupported plugin accepted' );
+	$last = array( 'revision' => 2, 'failure' => 'old-failure', 'status' => 'invalid', 'attempted_at' => time() );
+	$check( ! Sunrise\premium_license_attempt_required( $last, 2, 'old-failure', false ), 'An unchanged invalid key retried without a new failure' );
+	$check( Sunrise\premium_license_attempt_required( $last, 2, 'new-failure', false ), 'A new plugin failure did not retry the configured key' );
 } finally {
 	remove_filter( 'pre_http_request', $mock, 10 ); foreach ( $saved as $name => $value ) { if ( null === $value ) { delete_option( $name ); } else { update_option( $name, $value ); } }
 }

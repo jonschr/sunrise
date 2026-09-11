@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.26 — 2026-09-11
+
+- Retry a configured premium plugin key once after each new update failure. An unchanged invalid result remains suppressed until another failure or dashboard key change, and temporary failures retain their one-hour backoff when nothing new happens.
+
 ## 0.2.25 — 2026-09-10
 
 - Read one static update manifest instead of GitHub's unauthenticated REST API, avoiding the shared-IP 60-request limit seen on SiteDistrict. Continue accepting only the exact version-matched `sunrise.zip` GitHub release asset.

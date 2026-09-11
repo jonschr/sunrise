@@ -44,6 +44,12 @@ function premium_license_response( $value, $requested, $revision ) {
 	return $value;
 }
 
+function premium_license_attempt_required( $last, $revision, $failure, $valid ) {
+	if ( ! isset( $last['revision'], $last['failure'], $last['status'] ) || $last['revision'] !== $revision || $last['failure'] !== $failure ) { return true; }
+	if ( 'invalid' === $last['status'] || ( 'temporary' === $last['status'] && ! empty( $last['attempted_at'] ) && $last['attempted_at'] > time() - HOUR_IN_SECONDS ) ) { return false; }
+	return 'success' !== $last['status'] || ! $valid;
+}
+
 function premium_license_sync( &$state, $metadata ) {
 	$metadata = premium_license_metadata( $metadata );
 	if ( ! $metadata ) { return new \WP_Error( 'sunrise_premium_license_schema', 'Invalid premium license settings.' ); }
@@ -51,8 +57,7 @@ function premium_license_sync( &$state, $metadata ) {
 	foreach ( $metadata['configured'] as $id ) {
 		if ( ! isset( $installed[ premium_license_plugins()[ $id ] ] ) ) { continue; }
 		$failure = premium_license_failure( $id, $state ); $last = isset( $attempts[ $id ] ) ? $attempts[ $id ] : array();
-		if ( isset( $last['revision'], $last['status'] ) && $last['revision'] === $metadata['revision'] && ( 'invalid' === $last['status'] || ( 'temporary' === $last['status'] && ! empty( $last['attempted_at'] ) && $last['attempted_at'] > time() - HOUR_IN_SECONDS ) ) ) { continue; }
-		if ( isset( $last['revision'], $last['failure'], $last['status'] ) && $last['revision'] === $metadata['revision'] && $last['failure'] === $failure && 'success' === $last['status'] && premium_license_valid( $id ) ) { continue; }
+		if ( ! premium_license_attempt_required( $last, $metadata['revision'], $failure, premium_license_valid( $id ) ) ) { continue; }
 		$requested[] = $id;
 	}
 	if ( ! $requested ) { return false; }
