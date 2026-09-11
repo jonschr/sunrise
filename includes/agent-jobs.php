@@ -49,6 +49,9 @@ function agent_job_result( &$state, $record ) {
 		'execution_token' => $record['token'], 'sequence' => 1, 'status' => $record['status'], 'code' => $record['code'], 'worker_stopped' => true,
 	), $state ), $record['job']['id'] );
 	if ( is_wp_error( $job ) ) { return $job; }
+	if ( 'failed' === $record['status'] && isset( $record['job']['payload']['type'], $record['job']['payload']['installed_id'] ) && 'plugin' === $record['job']['payload']['type'] ) {
+		$id = array_search( $record['job']['payload']['installed_id'], premium_license_plugins(), true ); if ( false !== $id ) { $state['premium_license_failures'][ $id ] = $record['job']['id']; }
+	}
 	if ( 'uncertain' === $job['status'] ) { $record['phase'] = 'uncertain'; agent_job_save( $state, $record ); }
 	else { agent_job_clear( $state ); }
 	return true;

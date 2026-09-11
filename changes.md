@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.22 — 2026-09-10
+
+- Restore GP Premium, GenerateBlocks Pro, and Admin Columns Pro license state from write-only Control settings when the local license is invalid or a new update attempt fails. Invalid keys wait for a dashboard change; temporary provider failures retry at most hourly.
+
 ## 0.2.21 — 2026-09-10
 
 - Replace the migration sidebar gradient with the Sunrise sky image and refine navigation contrast, hover feedback, and spacing.

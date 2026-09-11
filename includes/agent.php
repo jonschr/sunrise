@@ -406,6 +406,7 @@ function agent_check_in() {
 		$state['transfer_previews'] = isset( $response['transfer_previews'] ) && true === $response['transfer_previews'];
 		$state['transfer_execution'] = isset( $response['transfer_execution'] ) && true === $response['transfer_execution'];
 		$state['file_transfers'] = isset( $response['file_transfers'] ) && true === $response['file_transfers'];
+		if ( isset( $response['premium_licenses'] ) ) { $licenses = premium_license_sync( $state, $response['premium_licenses'] ); if ( is_wp_error( $licenses ) ) { return $licenses; } }
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
