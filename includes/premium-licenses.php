@@ -5,15 +5,17 @@ defined( 'ABSPATH' ) || exit;
 
 function premium_license_plugins() {
 	return array(
-		'gp-premium'       => 'gp-premium/gp-premium.php',
-		'generateblocks-pro' => 'generateblocks-pro/plugin.php',
+		'advanced-custom-fields-pro' => 'advanced-custom-fields-pro/acf.php',
 		'admin-columns-pro' => 'admin-columns-pro/admin-columns-pro.php',
+		'generateblocks-pro' => 'generateblocks-pro/plugin.php',
+		'gp-premium'       => 'gp-premium/gp-premium.php',
 	);
 }
 
 function premium_license_metadata( $value ) {
-	if ( ! is_array( $value ) || count( $value ) !== 2 || ! isset( $value['revision'], $value['configured'] ) || ! is_int( $value['revision'] ) || $value['revision'] < 0 || ! is_array( $value['configured'] ) || count( $value['configured'] ) > 3 ) { return false; }
-	$supported = premium_license_plugins(); $seen = array();
+	$supported = premium_license_plugins();
+	if ( ! is_array( $value ) || count( $value ) !== 2 || ! isset( $value['revision'], $value['configured'] ) || ! is_int( $value['revision'] ) || $value['revision'] < 0 || ! is_array( $value['configured'] ) || count( $value['configured'] ) > count( $supported ) ) { return false; }
+	$seen = array();
 	foreach ( $value['configured'] as $id ) {
 		if ( ! is_string( $id ) || ! isset( $supported[ $id ] ) || isset( $seen[ $id ] ) ) { return false; }
 		$seen[ $id ] = true;
@@ -22,6 +24,10 @@ function premium_license_metadata( $value ) {
 }
 
 function premium_license_valid( $id ) {
+	if ( 'advanced-custom-fields-pro' === $id ) {
+		if ( ! function_exists( 'acf_pro_get_license_key' ) || ! \acf_pro_get_license_key() ) { return false; }
+		return function_exists( 'acf_pro_is_license_active' ) ? \acf_pro_is_license_active() : true;
+	}
 	if ( 'gp-premium' === $id ) { return (bool) get_option( 'gen_premium_license_key' ) && 'valid' === get_option( 'gen_premium_license_key_status' ); }
 	if ( 'generateblocks-pro' === $id ) { $value = get_option( 'generateblocks_pro_licensing', array() ); return ! empty( $value['key'] ) && isset( $value['status'] ) && 'valid' === $value['status']; }
 	$key = get_option( 'acp_activation_key' ); $details = get_option( 'acp_subscription_details', array() );
@@ -85,6 +91,7 @@ function premium_license_clear_edd_cache( $id, $key ) {
 }
 
 function premium_license_activate( $id, $key ) {
+	if ( 'advanced-custom-fields-pro' === $id ) { return premium_license_activate_acf( trim( $key ) ); }
 	if ( 'admin-columns-pro' === $id ) { return premium_license_activate_admin_columns( trim( $key ) ); }
 	$key = sanitize_key( $key ); $gp = 'gp-premium' === $id; $response = wp_remote_post( $gp ? 'https://generatepress.com' : 'https://generateblocks.com', array(
 		'timeout' => 15, 'redirection' => 0, 'body' => array( 'edd_action' => 'activate_license', 'license' => $key, 'item_name' => rawurlencode( $gp ? 'GP Premium' : 'GenerateBlocks Pro' ), 'url' => home_url() ),
@@ -97,6 +104,23 @@ function premium_license_activate( $id, $key ) {
 	else { $saved = get_option( 'generateblocks_pro_licensing', array() ); $saved['key'] = $key; $saved['status'] = $status; update_option( 'generateblocks_pro_licensing', $saved ); }
 	if ( 'valid' !== $status ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' ); }
 	premium_license_clear_edd_cache( $id, $key );
+	return true;
+}
+
+function premium_license_activate_acf( $key ) {
+	if ( function_exists( 'acf_pro_activate_license' ) ) {
+		$response = \acf_pro_activate_license( $key, true );
+		if ( is_wp_error( $response ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'License service unavailable.' ); }
+		if ( ! is_array( $response ) || ! array_key_exists( 'success', $response ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
+		return $response['success'] ? true : new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' );
+	}
+	if ( ! function_exists( 'acf_updates' ) || ! function_exists( 'acf_pro_update_license' ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'ACF PRO license activation is unavailable.' ); }
+	$response = \acf_updates()->request( 'v2/plugins/activate?p=pro', array( 'acf_license' => $key, 'acf_version' => \acf_get_setting( 'version' ), 'wp_name' => get_bloginfo( 'name' ), 'wp_url' => home_url(), 'wp_version' => get_bloginfo( 'version' ), 'wp_language' => get_bloginfo( 'language' ), 'wp_timezone' => get_option( 'timezone_string' ) ) );
+	if ( is_wp_error( $response ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'License service unavailable.' ); }
+	if ( ! is_array( $response ) || ! isset( $response['status'] ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
+	if ( 1 !== (int) $response['status'] ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' ); }
+	if ( empty( $response['license'] ) || ! is_string( $response['license'] ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
+	\acf_pro_update_license( $response['license'] ); \acf_updates()->refresh_plugins_transient();
 	return true;
 }
 

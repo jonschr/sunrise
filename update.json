@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.27/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.28/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated update inventory, automatic-update policies, and remote update jobs.",
-    "changelog": "Move Administration and Site settings from the dashboard header into the Sunrise sidebar."
+    "changelog": "Restore Advanced Custom Fields PRO license keys through its native licensing API, including legacy versions."
   }
 }

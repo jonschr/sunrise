@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.2.28 — 2026-09-11
+
+- Restore Advanced Custom Fields PRO license keys through its native licensing API, including legacy versions.
+
 ## 0.2.27 — 2026-09-11
 
 - Move the WordPress-only Administration and Site settings controls from the dashboard header into the Sunrise sidebar.
