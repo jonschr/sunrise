@@ -9,9 +9,9 @@ try {
  $assert( $draft === Sunrise\save_migration_draft( $draft ) && $draft === Sunrise\migration_draft() );
  foreach ( array( 'connection' => wp_generate_uuid4(), 'direction' => 'sideways', 'scopes' => array( 'shell' ), 'names' => array( 'siteurl' ), 'date' => '2026-02-31', 'peer' => array( 'id' => wp_generate_uuid4(), 'url' => 'https://secret@peer.example/', 'name' => 'Peer' ) ) as $key => $bad ) { $invalid = $draft; $invalid[ $key ] = $bad; $assert( is_wp_error( Sunrise\save_migration_draft( $invalid ) ) ); }
  $assert( $draft === Sunrise\migration_draft() );
- $requests = array(); $http = function ( $pre, $args, $url ) use ( &$requests ) {
+ $id = wp_generate_uuid4(); $requests = array(); $http = function ( $pre, $args, $url ) use ( &$requests, $id, $draft ) {
   if ( false !== strpos( $url, '/v1/agent/dashboard' ) ) { $payload = json_decode( $args['body'], true ); $requests[] = $payload; $body = array( 'status' => 'GET' === $payload['method'] ? 200 : 202, 'body' => array( 'id' => wp_generate_uuid4() ) ); }
-  elseif ( false !== strpos( $url, '/v1/agent/transfers/status' ) ) { $body = array( 'items' => array(), 'execution_available' => true, 'file_transfers' => true ); }
+  elseif ( false !== strpos( $url, '/v1/agent/transfers/status' ) ) { $body = array( 'items' => array( array( 'id' => $id, 'source_site_id' => Sunrise\agent_state()['site_id'], 'destination_site_id' => $draft['peer']['id'] ) ), 'execution_available' => true, 'file_transfers' => true ); }
   else { return $pre; }
   return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( $body ) );
  };
@@ -19,7 +19,8 @@ try {
  $mixed = $draft; $mixed['scopes'] = array( 'options', 'plugins' ); $keys = array( wp_generate_uuid4(), wp_generate_uuid4() );
  $assert( ! is_wp_error( Sunrise\migration_prepare( array( 'keys' => $keys, 'draft' => $mixed ) ) ) && 2 === count( $requests ) );
  $assert( isset( $requests[0]['data']['names'], $requests[1]['data']['file_selection']['plugins'] ) && $requests[0]['headers']['Idempotency-Key'] === $keys[0] && $requests[1]['headers']['Idempotency-Key'] === $keys[1] );
- $id = wp_generate_uuid4(); $assert( ! is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'source', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) && '/approve' === substr( $requests[2]['path'], -8 ) );
+ $assert( ! is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'source', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) && '/approve' === substr( $requests[2]['path'], -8 ) );
+	$assert( is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'destination', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) );
  $assert( is_wp_error( Sunrise\migration_action( 'approve', array( 'id' => $id, 'side' => 'both', 'revision' => 0, 'plan_hash' => str_repeat( 'a', 64 ) ) ) ) );
  remove_filter( 'pre_http_request', $http, 10 );
  require_once WP_PLUGIN_DIR . '/sunrise/includes/network.php'; ob_start(); Sunrise\managed_network_page( 'migrations' ); $markup = ob_get_clean();

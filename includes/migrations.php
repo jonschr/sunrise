@@ -62,6 +62,10 @@ function migration_action( $action, $data ) {
 	if ( ! in_array( $action, array( 'approve', 'cancel' ), true ) || ! is_array( $data ) || ! isset( $data['id'], $data['revision'] ) || ! is_string( $data['id'] ) || ! wp_is_uuid( $data['id'], 4 ) || ! is_int( $data['revision'] ) || $data['revision'] < 0 ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration action.', array( 'status' => 400 ) ); }
 	if ( 'approve' === $action ) {
 		if ( count( $data ) !== 4 || ! isset( $data['side'], $data['plan_hash'] ) || ! in_array( $data['side'], array( 'source', 'destination' ), true ) || ! is_string( $data['plan_hash'] ) || ! preg_match( '/^[a-f0-9]{64}$/D', $data['plan_hash'] ) ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration approval.', array( 'status' => 400 ) ); }
+		$status = migration_status(); if ( is_wp_error( $status ) ) { return $status; }
+		$job = current( array_filter( $status['items'] ?? array(), function ( $item ) use ( $data ) { return ( $item['id'] ?? null ) === $data['id']; } ) );
+		$own_side = $job && ( $job['source_site_id'] ?? null ) === agent_state()['site_id'] ? 'source' : ( $job && ( $job['destination_site_id'] ?? null ) === agent_state()['site_id'] ? 'destination' : null );
+		if ( $data['side'] !== $own_side ) { return new \WP_Error( 'sunrise_migration_side', 'Approve this site’s side of the migration from this site.', array( 'status' => 403 ) ); }
 		$body = array( 'side' => $data['side'], 'revision' => $data['revision'], 'plan_hash' => $data['plan_hash'] );
 	} else { if ( count( $data ) !== 2 ) { return new \WP_Error( 'sunrise_migration_action', 'Invalid migration cancellation.', array( 'status' => 400 ) ); } $body = array( 'revision' => $data['revision'] ); }
 	$result = migration_control_request( 'POST', '/' . $data['id'] . '/' . $action, $body ); if ( is_wp_error( $result ) ) { return $result; }
