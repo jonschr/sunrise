@@ -15,5 +15,5 @@
   }catch{status.textContent='';send({error:'service_unavailable'});}
   finally{active--;pending.delete(msg.id);}
  });
- const url=new URL(cfg.frame);url.searchParams.set('parent',location.origin);url.searchParams.set('channel',cfg.channel);frame.src=url.href;
+ const url=new URL(cfg.frame);url.searchParams.set('parent',location.origin);url.searchParams.set('channel',cfg.channel);url.searchParams.set('client',cfg.version);frame.src=url.href;
 })();

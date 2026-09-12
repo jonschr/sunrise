@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.1 — 2026-09-11
+
+- Show the installed Sunrise Client version beneath the Sunrise Control version in the WordPress dashboard.
+
 ## 0.3.0 — 2026-09-11
 
 - Pair two connected sites only after a WordPress administrator approves on each site. Keep multiple encrypted, site-specific pairings available to every current administrator without granting access to the rest of the network.

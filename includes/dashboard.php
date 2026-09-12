@@ -16,6 +16,6 @@ function dashboard_page() {
 	$url = agent_dashboard_url(); if ( ! $url ) { return; }
 	$channel = wp_generate_uuid4();
 	wp_enqueue_script( 'sunrise-dashboard', plugins_url( '../assets/dashboard.js', __FILE__ ), array(), VERSION, true );
-	wp_localize_script( 'sunrise-dashboard', 'sunriseDashboard', array( 'api' => rest_url( 'sunrise/v1/dashboard' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'origin' => agent_url(), 'channel' => $channel, 'frame' => agent_url() . '/wordpress' ) );
+	wp_localize_script( 'sunrise-dashboard', 'sunriseDashboard', array( 'api' => rest_url( 'sunrise/v1/dashboard' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'origin' => agent_url(), 'channel' => $channel, 'frame' => agent_url() . '/wordpress', 'version' => VERSION ) );
 	echo '<p id="sunrise-dashboard-status" role="status"></p><a id="sunrise-dashboard-permission" hidden href="' . esc_url( add_query_arg( array( 'dashboard_site' => agent_state()['site_id'], 'view' => 'updates' ), $url ) ) . '">Sign in to enable network controls</a><iframe id="sunrise-dashboard" class="sunrise-dashboard-frame" title="Sunrise network updates" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>';
 }

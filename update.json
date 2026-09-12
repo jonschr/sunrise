@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.0/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.1/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site management, updates, and paired WordPress migrations.",
-    "changelog": "Add persistent two-admin pairing and direct database push/pull with automatic serialized-safe URL/path replacement and recovery tables."
+    "changelog": "Show the installed Sunrise Client version beneath the Sunrise Control version in the WordPress dashboard."
   }
 }

@@ -3,14 +3,14 @@
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() ) { WP_CLI::error( 'Disposable local fixture required.' ); }
 $checker = Sunrise\plugin_update_checker();
 $saved = get_site_option( 'external_updates-sunrise', null );
-$calls = array(); $mode = 'release';
-$asset = 'https://github.com/jonschr/sunrise/releases/download/v0.3.0/sunrise.zip';
-$transport = function ( $pre, $options, $url ) use ( &$calls, &$mode, $asset ) {
+$calls = array(); $mode = 'release'; $offered = '999.0.0';
+$asset = 'https://github.com/jonschr/sunrise/releases/download/v' . $offered . '/sunrise.zip';
+$transport = function ( $pre, $options, $url ) use ( &$calls, &$mode, $asset, $offered ) {
  $calls[] = $url;
  if ( 'raw.githubusercontent.com' !== wp_parse_url( $url, PHP_URL_HOST ) || '/jonschr/sunrise/main/update.json' !== wp_parse_url( $url, PHP_URL_PATH ) ) { throw new RuntimeException( 'Unexpected metadata source' ); }
  if ( isset( $options['headers']['Authorization'] ) ) { throw new RuntimeException( 'A public update must not send an authorization token' ); }
  if ( 'offline' === $mode ) { return new WP_Error( 'fixture_offline', 'Metadata unavailable' ); }
- $body = array( 'name' => 'invalid_name' === $mode ? 'Other' : 'Sunrise', 'version' => '0.3.0', 'download_url' => 'invalid_package' === $mode ? 'https://example.invalid/plugin.zip' : $asset, 'icons' => array( 'svg' => 'https://raw.githubusercontent.com/jonschr/sunrise/main/assets/icon.svg' ) );
+ $body = array( 'name' => 'invalid_name' === $mode ? 'Other' : 'Sunrise', 'version' => $offered, 'download_url' => 'invalid_package' === $mode ? 'https://example.invalid/plugin.zip' : $asset, 'icons' => array( 'svg' => 'https://raw.githubusercontent.com/jonschr/sunrise/main/assets/icon.svg' ) );
  return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( $body ) );
 };
 function sunrise_update_assert( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
@@ -21,14 +21,14 @@ try {
  $native = apply_filters( 'site_transient_update_plugins', $collision );
  sunrise_update_assert( empty( $native->response['sunrise/sunrise.php'] ) && ! $calls, 'Cached WordPress.org collision is removed without a network request' );
  $update = $checker->checkForUpdates();
- sunrise_update_assert( $update && '0.3.0' === $update->version && $asset === $update->download_url, 'Static metadata offers its exact matching release asset' );
+ sunrise_update_assert( $update && $offered === $update->version && $asset === $update->download_url, 'Static metadata offers its exact matching release asset' );
  $before = count( $calls ); Sunrise\plugin_update_check(); sunrise_update_assert( count( $calls ) === $before, 'Automated reports reuse Sunrise metadata for one hour' );
  Sunrise\plugin_update_check( true ); sunrise_update_assert( count( $calls ) === $before + 1, 'Requested refresh forces a Sunrise metadata check' );
  $native = apply_filters( 'site_transient_update_plugins', $collision );
- sunrise_update_assert( $asset === $native->response['sunrise/sunrise.php']->package && '0.3.0' === $native->response['sunrise/sunrise.php']->new_version, 'Own update survives collision protection in the native WordPress update list' );
+ sunrise_update_assert( $asset === $native->response['sunrise/sunrise.php']->package && $offered === $native->response['sunrise/sunrise.php']->new_version, 'Own update survives collision protection in the native WordPress update list' );
  require_once WP_PLUGIN_DIR . '/sunrise/includes/api.php';
  $reported = array_values( array_filter( Sunrise\inventory()['plugins'], function ( $item ) { return 'sunrise/sunrise.php' === $item['id']; } ) );
- sunrise_update_assert( 1 === count( $reported ) && true === $reported[0]['update_available'] && '0.3.0' === $reported[0]['update']['version'], 'Automated inventory reports the same Sunrise offer shown by WordPress' );
+ sunrise_update_assert( 1 === count( $reported ) && true === $reported[0]['update_available'] && $offered === $reported[0]['update']['version'], 'Automated inventory reports the same Sunrise offer shown by WordPress' );
  sunrise_update_assert( ! empty( $native->response['sunrise/sunrise.php']->icons['svg'] ) && false !== strpos( $native->response['sunrise/sunrise.php']->icons['svg'], '/assets/icon.svg' ), 'Sunrise mark is exposed as the plugin update icon' );
  $force_off = function () { return false; };
  add_filter( 'auto_update_plugin', $force_off, 19 );
