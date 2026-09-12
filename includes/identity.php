@@ -116,8 +116,9 @@ function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 		foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) { wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) ); }
 		global $wpdb;
 		delete_metadata( 'user', 0, 'sunrise_migration_draft', '', true );
-		$names = array( 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_remote_job_fence', 'sunrise_automatic_update_failures', 'sunrise_error_groups', 'sunrise_error_capture_lock' );
-		foreach ( array( 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_last_job_', 'sunrise_job_', 'sunrise_error_ack_' ) as $prefix ) {
+		delete_metadata( 'user', 0, 'sunrise_migration_pair_pending', '', true );
+		$names = array( 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_remote_job_fence', 'sunrise_automatic_update_failures', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_migration_pairs', 'sunrise_database_active', 'sunrise_database_last', 'sunrise_control_reauth_required' );
+		foreach ( array( 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_last_job_', 'sunrise_job_', 'sunrise_error_ack_', 'sunrise_database_job_', 'sunrise_migration_nonce_' ) as $prefix ) {
 			$found = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) );
 			if ( $wpdb->last_error ) { throw new \RuntimeException( 'Could not enumerate local state' ); }
 			$names = array_merge( $names, $found );

@@ -23,23 +23,49 @@ function enrollment_permission() {
 }
 
 function register_routes() {
+	require_once __DIR__ . '/migration-pairs.php';
+	require_once __DIR__ . '/direct-database.php';
 	register_rest_route( 'sunrise/v1', '/agent/connect', array( 'methods' => 'POST', 'callback' => function () { return agent_enroll( bin2hex( random_bytes( 32 ) ) ); }, 'permission_callback' => __NAMESPACE__ . '\\enrollment_permission' ) );
 	register_rest_route( 'sunrise/v1', '/wake', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_wake', 'permission_callback' => __NAMESPACE__ . '\\agent_wake_permission' ) );
 	register_rest_route( 'sunrise/v1', '/dashboard', array( 'methods' => 'POST', 'callback' => function ( $request ) { require_once __DIR__ . '/dashboard.php'; return dashboard_request( $request ); }, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
-	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/catalog' => array( 'GET' ), '/peers' => array( 'GET' ), '/sync' => array( 'POST' ), '/prepare' => array( 'POST' ), '/approve' => array( 'POST' ), '/cancel' => array( 'POST' ) ) as $path => $methods ) {
+	foreach ( array( '' => array( 'GET', 'POST' ), '/status' => array( 'GET' ), '/catalog' => array( 'GET' ), '/peers' => array( 'GET' ), '/sync' => array( 'POST' ), '/prepare' => array( 'POST' ), '/approve' => array( 'POST' ), '/cancel' => array( 'POST' ), '/database/restore' => array( 'POST' ), '/database/cancel' => array( 'POST' ), '/pair/start' => array( 'POST' ), '/pair/complete' => array( 'POST' ), '/pair/remove' => array( 'POST' ) ) as $path => $methods ) {
 		register_rest_route( 'sunrise/v1', '/transfers/workbench' . $path, array( 'methods' => $methods, 'callback' => function ( $request ) use ( $path ) {
-			require_once __DIR__ . '/migrations.php'; $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; }
+			require_once __DIR__ . '/migrations.php';
 			if ( '/status' === $path ) { return migration_status(); }
 			if ( '/peers' === $path ) { return migration_peers( $request->get_param( 'after' ) ); }
 			if ( '/catalog' === $path ) { return migration_file_catalog( $request->get_param( 'site' ), $request->get_param( 'after' ) ); }
+			if ( '/pair/start' === $path ) { return migration_pair_start( $request->get_param( 'peer' ) ); }
+			if ( '/pair/complete' === $path ) { return migration_pair_complete( $request->get_param( 'value' ) ); }
+			if ( '/pair/remove' === $path ) { return migration_pair_remove( $request->get_param( 'peer' ) ); }
+			if ( '/database/restore' === $path ) { $result = database_destination_restore( $request->get_param( 'id' ) ); return is_wp_error( $result ) ? $result : migration_status(); }
+			if ( '/database/cancel' === $path ) { $result = migration_database_cancel( $request->get_param( 'id' ) ); return is_wp_error( $result ) ? $result : migration_status(); }
 			if ( '/sync' === $path ) { return migration_sync(); }
 			if ( '/prepare' === $path ) { return migration_prepare( $request->get_json_params() ); }
 			if ( in_array( $path, array( '/approve', '/cancel' ), true ) ) { return migration_action( substr( $path, 1 ), $request->get_json_params() ); }
 			if ( 'GET' === $request->get_method() ) { return migration_draft(); }
 			if ( strlen( $request->get_body() ) > 16384 ) { return new \WP_Error( 'sunrise_migration_size', 'Selection too large.', array( 'status' => 413 ) ); }
 			return save_migration_draft( $request->get_json_params() );
-		}, 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
+		}, 'permission_callback' => __NAMESPACE__ . '\\migration_access' ) );
 	}
+	$direct = array(
+		'ping' => function () { return array_merge( database_local_details(), array( 'installation_id' => installation_identity()['id'] ) ); },
+		'export' => function ( $request, $data, $peer ) { return database_source_export( $data['id'] ?? null, $peer ); },
+		'chunk' => function ( $request, $data, $peer ) { return database_source_chunk( $data['id'] ?? null, $peer, $data['table'] ?? null, $data['offset'] ?? null ); },
+		'prepare' => function ( $request, $data, $peer ) { return database_destination_prepare( $data['id'] ?? null, $peer, $data['manifest'] ?? null ); },
+		'upload' => function ( $request, $data, $peer ) { return database_destination_receive( $data['id'] ?? null, $peer, $data['table'] ?? null, $data['offset'] ?? null, $data['data'] ?? null ); },
+		'stage' => function ( $request, $data, $peer ) { return database_destination_stage( $data['id'] ?? null, $peer, $data['index'] ?? null ); },
+		'commit' => function ( $request, $data, $peer ) { return database_destination_commit( $data['id'] ?? null, $peer ); },
+		'finish' => function ( $request, $data, $peer ) { return database_source_finish( $data['id'] ?? null, $peer ); },
+		'cancel' => function ( $request, $data, $peer ) { return database_local_cancel( $data['id'] ?? null, $peer ); },
+		'revoke' => function ( $request, $data, $peer ) { return migration_pair_revoke_remote( $peer ); },
+	);
+	foreach ( $direct as $action => $callback ) { register_rest_route( 'sunrise/v1', '/migrations/direct/' . $action, array( 'methods' => 'POST', 'callback' => function ( $request ) use ( $action, $callback ) {
+		if ( strlen( $request->get_body() ) > ( 'prepare' === $action ? 1000000 : 400000 ) ) { return new \WP_Error( 'sunrise_database_size', 'Database request too large.', array( 'status' => 413 ) ); }
+		$data = $request->get_json_params(); if ( ! is_array( $data ) ) { return new \WP_Error( 'sunrise_database_request', 'Invalid database request.', array( 'status' => 400 ) ); }
+		if ( in_array( $action, array( 'ping', 'cancel', 'revoke' ), true ) ) { return $callback( $request, $data, $request->get_header( 'X-Sunrise-Site' ) ); }
+		$lock = database_process_lock(); if ( is_wp_error( $lock ) ) { return $lock; }
+		try { return $callback( $request, $data, $request->get_header( 'X-Sunrise-Site' ) ); } finally { database_process_unlock( $lock ); }
+	}, 'permission_callback' => __NAMESPACE__ . '\\migration_pair_permission' ) ); }
 
 	foreach ( array( 'snapshot', 'preview' ) as $operation ) {
 		register_rest_route( 'sunrise/v1', '/transfers/' . $operation, array( 'methods' => 'POST', 'callback' => function ( $request ) use ( $operation ) {

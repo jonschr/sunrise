@@ -14,15 +14,16 @@ foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) {
 
 global $wpdb;
 delete_metadata( 'user', 0, 'sunrise_migration_draft', '', true );
+delete_metadata( 'user', 0, 'sunrise_migration_pair_pending', '', true );
 wp_unschedule_hook( 'sunrise_check_in' );
 wp_unschedule_hook( 'sunrise_transfer_continue' );
 delete_metadata( 'user', 0, 'sunrise_file_pruned_at', '', true );
-foreach ( array( 'sunrise_job_', 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_error_ack_', 'sunrise_last_job_', '_transient_sunrise_notice_', '_transient_timeout_sunrise_notice_' ) as $prefix ) {
+foreach ( array( 'sunrise_job_', 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_error_ack_', 'sunrise_last_job_', 'sunrise_database_job_', 'sunrise_migration_nonce_', '_transient_sunrise_notice_', '_transient_timeout_sunrise_notice_' ) as $prefix ) {
 	$names = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) );
 	foreach ( $names as $name ) {
 		delete_option( $name );
 	}
 }
-foreach ( array( 'sunrise_agent_interval', 'sunrise_automatic_update_failures', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock' ) as $name ) {
+foreach ( array( 'sunrise_agent_interval', 'sunrise_automatic_update_failures', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock', 'sunrise_migration_pairs', 'sunrise_database_active', 'sunrise_database_last', 'sunrise_control_reauth_required' ) as $name ) {
 	delete_option( $name );
 }

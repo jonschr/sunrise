@@ -194,7 +194,8 @@ function admin_page( $view = 'network' ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
-	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! is_wp_error( installation_guard() ) ) {
+	$migration_connected = 'migrations' === $view && ( (bool) get_option( 'sunrise_migration_pairs' ) || (bool) array_filter( agent_states(), function ( $state ) { return ! empty( $state['site_id'] ) && agent_owner_valid( $state ) && agent_service_matches( $state ); } ) );
+	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! $migration_connected && ! is_wp_error( installation_guard() ) ) {
 		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Until connected, Sunrise sends no inventory or error reports.', 'sunrise' ) . '</p>';
 		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
 		connection_form(); echo '</section></div>';

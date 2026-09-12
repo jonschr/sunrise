@@ -97,15 +97,16 @@ function database_scan( $conn, $prefix, $suffix, $schema, $output = null, $deadl
 	return array( 'rows' => $count, 'bytes' => $bytes, 'sha256' => hash_final( $hash ) );
 }
 /** A consistent InnoDB read snapshot, streamed to private row files instead of PHP arrays or executable SQL. */
-function database_export( $id ) {
-	$access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; } $conn = null; $created = array();
+function database_export( $id, $authorize = true, $owner_id = null ) {
+	if ( $authorize ) { $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; } } $conn = null; $created = array();
 	try {
 		global $wpdb, $wp_db_version; $root = transfer_file_workspace( $id ); $conn = transfer_mysql(); $conn->query( "SET SESSION time_zone='+00:00'" ); $tables = database_tables( $conn, $wpdb->prefix ); $metadata = array();
 		foreach ( $tables as $suffix ) { $metadata[ $suffix ] = database_schema( $conn, $wpdb->prefix . $suffix ); }
 		if ( ! $conn->query( 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ' ) || ! $conn->query( 'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY' ) ) { throw new \RuntimeException( 'sunrise_database_snapshot' ); }
-		$owner = database_query( $conn, 'SELECT ID,user_login,user_pass FROM ' . database_identifier( $wpdb->users ) . ' WHERE ID=?', array( get_current_user_id() ) )->get_result()->fetch_assoc();
+		$owner = database_query( $conn, 'SELECT ID,user_login,user_pass FROM ' . database_identifier( $wpdb->users ) . ' WHERE ID=?', array( (string) ( null === $owner_id ? get_current_user_id() : $owner_id ) ) )->get_result()->fetch_assoc();
 		if ( ! $owner ) { throw new \RuntimeException( 'sunrise_database_owner' ); }
-		$manifest = array( 'schema' => 1, 'scope' => 'database', 'site_id' => agent_state()['site_id'], 'site_url' => site_url( '/' ), 'home_url' => home_url( '/' ), 'prefix' => $wpdb->prefix, 'db_version' => (int) $wp_db_version, 'owner' => array( 'id' => (int) $owner['ID'], 'login' => $owner['user_login'], 'fingerprint' => hash( 'sha256', $owner['ID'] . "\n" . $owner['user_login'] . "\n" . $owner['user_pass'] ) ), 'tables' => array() );
+		$site_id = function_exists( __NAMESPACE__ . '\\migration_site_id' ) ? migration_site_id() : agent_state()['site_id'];
+		$manifest = array( 'schema' => 1, 'scope' => 'database', 'site_id' => $site_id, 'site_url' => site_url( '/' ), 'home_url' => home_url( '/' ), 'root_path' => untrailingslashit( wp_normalize_path( ABSPATH ) ), 'prefix' => $wpdb->prefix, 'db_version' => (int) $wp_db_version, 'owner' => array( 'id' => (int) $owner['ID'], 'login' => $owner['user_login'], 'fingerprint' => hash( 'sha256', $owner['ID'] . "\n" . $owner['user_login'] . "\n" . $owner['user_pass'] ) ), 'tables' => array() );
 		// ponytail: consistent snapshot creation is bounded to 20 seconds / 512 MiB; long-running exports need a durable snapshot worker.
 		$deadline = microtime( true ) + 20; $total = 0;
 		foreach ( $metadata as $suffix => $schema ) {
@@ -126,9 +127,11 @@ function database_export( $id ) {
 
 /** Import compatibility is checked before any destination table is replaced. */
 function database_manifest( $conn, $manifest ) {
- if ( ! is_array( $manifest ) || count( $manifest ) !== 9 || ( $manifest['schema'] ?? null ) !== 1 || ( $manifest['scope'] ?? null ) !== 'database' || ! is_string( $manifest['site_id'] ?? null ) || ! wp_is_uuid( $manifest['site_id'], 4 ) || ! is_int( $manifest['db_version'] ?? null ) || $manifest['db_version'] < 1 || ! is_array( $manifest['tables'] ?? null ) || ! $manifest['tables'] || array_values( $manifest['tables'] ) !== $manifest['tables'] || count( $manifest['tables'] ) > 200 ) { throw new \InvalidArgumentException( 'sunrise_database_manifest' ); }
+ $required = array( 'schema', 'scope', 'site_id', 'site_url', 'home_url', 'prefix', 'db_version', 'owner', 'tables' ); $allowed = array_merge( $required, array( 'root_path' ) );
+ if ( ! is_array( $manifest ) || array_diff( $required, array_keys( $manifest ) ) || array_diff( array_keys( $manifest ), $allowed ) || ( $manifest['schema'] ?? null ) !== 1 || ( $manifest['scope'] ?? null ) !== 'database' || ! is_string( $manifest['site_id'] ?? null ) || ! wp_is_uuid( $manifest['site_id'], 4 ) || ! is_int( $manifest['db_version'] ?? null ) || $manifest['db_version'] < 1 || ! is_array( $manifest['tables'] ?? null ) || ! $manifest['tables'] || array_values( $manifest['tables'] ) !== $manifest['tables'] || count( $manifest['tables'] ) > 200 ) { throw new \InvalidArgumentException( 'sunrise_database_manifest' ); }
  database_identifier( $manifest['prefix'] ?? null );
  transfer_rewrite( '', 'text', array( $manifest['site_url'] ?? '' => $manifest['home_url'] ?? '' ) );
+ if ( isset( $manifest['root_path'] ) ) { transfer_path_rewrite( '', 'text', array( $manifest['root_path'] => $manifest['root_path'] ) ); }
  $owner = $manifest['owner'] ?? null;
  if ( ! is_array( $owner ) || count( $owner ) !== 3 || ! is_int( $owner['id'] ?? null ) || $owner['id'] < 1 || ! is_string( $owner['login'] ?? null ) || ! $owner['login'] || strlen( $owner['login'] ) > 60 || ! is_string( $owner['fingerprint'] ?? null ) || ! preg_match( '/^[a-f0-9]{64}$/D', $owner['fingerprint'] ) ) { throw new \InvalidArgumentException( 'sunrise_database_owner' ); }
  $names = array(); $total = 0;
@@ -143,8 +146,8 @@ function database_manifest( $conn, $manifest ) {
 }
 
 /** No writes: the approved plan binds both table snapshots and the exact copied administrator. */
-function database_preview( $manifest ) {
- $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; } $conn = null;
+function database_preview( $manifest, $authorize = true ) {
+ if ( $authorize ) { $access = transfer_inventory_access(); if ( is_wp_error( $access ) ) { return $access; } } $conn = null;
  try {
   global $wpdb, $wp_db_version; $conn = transfer_mysql(); $manifest = database_manifest( $conn, $manifest );
   if ( $manifest['site_id'] === agent_state()['site_id'] || $manifest['db_version'] !== (int) $wp_db_version ) { throw new \RuntimeException( 'sunrise_database_core_mismatch' ); }
@@ -160,7 +163,8 @@ function database_preview( $manifest ) {
   }
   if ( database_tables( $conn, $wpdb->prefix ) !== $tables ) { throw new \RuntimeException( 'sunrise_database_schema_changed' ); }
   $conn->rollback();
-  $plan = array( 'schema' => 1, 'scope' => 'database', 'source_site_id' => $manifest['site_id'], 'destination_site_id' => agent_state()['site_id'], 'source' => $manifest, 'destination' => array( 'installation_id' => installation_identity()['id'], 'owner' => get_current_user_id(), 'prefix' => $wpdb->prefix, 'site_url' => site_url( '/' ), 'home_url' => home_url( '/' ), 'tables' => $destination ) );
+  $destination_site_id = function_exists( __NAMESPACE__ . '\\migration_site_id' ) ? migration_site_id() : agent_state()['site_id'];
+  $plan = array( 'schema' => 1, 'scope' => 'database', 'source_site_id' => $manifest['site_id'], 'destination_site_id' => $destination_site_id, 'source' => $manifest, 'destination' => array( 'installation_id' => installation_identity()['id'], 'owner' => get_current_user_id(), 'prefix' => $wpdb->prefix, 'site_url' => site_url( '/' ), 'home_url' => home_url( '/' ), 'root_path' => untrailingslashit( wp_normalize_path( ABSPATH ) ), 'tables' => $destination ) );
   if ( strlen( wp_json_encode( $plan ) ) > 1400000 ) { throw new \RuntimeException( 'sunrise_database_size_limit' ); }
   return array( 'plan' => $plan, 'fingerprint' => hash( 'sha256', wp_json_encode( $plan, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ), 'read_only' => true, 'authorization_required' => true );
  } catch ( \Throwable $error ) { return new \WP_Error( 'sunrise_database_preview', 'Could not compare the database: ' . ( preg_match( '/^sunrise_database_[a-z_]+$/D', $error->getMessage() ) ? $error->getMessage() : 'database_read_error' ), array( 'status' => 409 ) ); }
@@ -175,12 +179,14 @@ function database_rewrite_row( $suffix, $row, $schema, $source, $destination ) {
  foreach ( $schema['columns'] as $column ) {
   $key = $column['name']; $value = $row[ $key ]; if ( null === $value ) { continue; }
   // Binary payloads are preserved. Rewrite text and serialized/JSON strings, never executable PHP.
-  $serialized = (bool) preg_match( '/^(?:[aObisSdCREr]:|N;)/', $value );
+  $serialized = transfer_is_serialized( $value );
   if ( ! $serialized && ! preg_match( '/^(?:varchar|char|tinytext|text|mediumtext|longtext|json)\b/', $column['type'] ) ) { continue; }
-  $contains = false; foreach ( $urls as $from => $to ) { if ( $from !== $to && ( false !== strpos( $value, $from ) || false !== strpos( $value, str_replace( '/', '\\/', $from ) ) ) ) { $contains = true; break; } }
-  if ( ! $contains ) { continue; }
+  $contains_url = false; foreach ( $urls as $from => $to ) { if ( $from !== $to && ( false !== strpos( $value, $from ) || false !== strpos( $value, str_replace( '/', '\\/', $from ) ) ) ) { $contains_url = true; break; } }
+  $contains_path = isset( $source['root_path'], $destination['root_path'] ) && $source['root_path'] !== $destination['root_path'] && ( false !== strpos( $value, $source['root_path'] ) || false !== strpos( $value, str_replace( '/', '\\/', $source['root_path'] ) ) );
+  if ( ! $contains_url && ! $contains_path ) { continue; }
   $format = $serialized ? 'serialized' : 'text'; if ( ! $serialized && preg_match( '/^\s*[\[{]/', $value ) ) { json_decode( $value ); if ( JSON_ERROR_NONE === json_last_error() ) { $format = 'json'; } }
-  $row[ $key ] = transfer_rewrite( $value, $format, $urls );
+  $row[ $key ] = $contains_url ? transfer_rewrite( $value, $format, $urls ) : $value;
+  if ( isset( $source['root_path'], $destination['root_path'] ) && $source['root_path'] !== $destination['root_path'] ) { $row[ $key ] = transfer_path_rewrite( $row[ $key ], $format, array( $source['root_path'] => $destination['root_path'] ) ); }
  }
  if ( 'options' === $suffix ) {
   if ( 'siteurl' === $row['option_name'] ) { $row['option_value'] = untrailingslashit( $destination['site_url'] ); }
@@ -191,7 +197,7 @@ function database_rewrite_row( $suffix, $row, $schema, $source, $destination ) {
  return $row;
 }
 
-/** Internal staging primitive. Its generated names cannot address live WordPress tables. No HTTP route calls it. */
+/** Internal staging primitive. Its generated names cannot address live WordPress tables. */
 function database_stage_table( $conn, $name, $table, $path, $source, $destination ) {
  if ( ! is_string( $name ) || ! preg_match( '/^sunrise_import_[a-f0-9]{20}_[0-9]{1,3}$/D', $name ) || is_link( $path ) || ! is_file( $path ) || filesize( $path ) !== $table['bytes'] || hash_file( 'sha256', $path ) !== $table['sha256'] ) { throw new \RuntimeException( 'sunrise_database_stage' ); }
  $created = false; $stream = null;

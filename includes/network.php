@@ -100,7 +100,7 @@ function network_page() {
 /** Central enrollment never falls back to stored peer credentials or network-wide site tokens. */
 function managed_network_page( $view ) {
 	$state = agent_state();
-	if ( empty( $state['site_id'] ) ) {
+	if ( empty( $state['site_id'] ) && 'migrations' !== $view ) {
 		if ( ! empty( $state['approval_url'] ) && ! empty( $state['phrase'] ) ) {
 			echo '<p>' . esc_html__( 'Open the approval page and compare this verification phrase:', 'sunrise' ) . ' <strong>' . esc_html( $state['phrase'] ) . '</strong></p><p><a class="button button-primary" href="' . esc_url( $state['approval_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Approve connection in Sunrise Control', 'sunrise' ) . '</a></p>';
 			form_start( 'local', 'agent_sync' ); submit_button( __( 'Finish connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';

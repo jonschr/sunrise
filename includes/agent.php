@@ -39,7 +39,8 @@ function agent_service_matches( $state ) {
 
 function agent_owner_valid( $state ) {
 	$user = get_user_by( 'id', $state['user_id'] );
-	return $user && user_can( $user, 'manage_options' ) && user_can( $user, 'update_plugins' ) && user_can( $user, 'update_themes' ) && user_can( $user, 'update_core' );
+	$fingerprint = $user ? hash( 'sha256', $user->ID . "\n" . $user->user_login . "\n" . $user->user_pass ) : null;
+	return $user && ( empty( $state['owner_fingerprint'] ) || hash_equals( $state['owner_fingerprint'], $fingerprint ) ) && user_can( $user, 'manage_options' ) && user_can( $user, 'update_plugins' ) && user_can( $user, 'update_themes' ) && user_can( $user, 'update_core' );
 }
 
 /** Non-autoloaded state; a WordPress installation normally has only a few connecting administrators. */
@@ -130,6 +131,7 @@ function agent_enroll_locked( $intent = null ) {
 		require_once __DIR__ . '/controller.php';
 		$state = array( 'control_url' => agent_url(), 'url' => untrailingslashit( site_url() ), 'user_id' => get_current_user_id(), 'sequence' => 0 );
 		if ( ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator needs all update capabilities.' ); }
+		$user = wp_get_current_user(); $state['owner_fingerprint'] = hash( 'sha256', $user->ID . "\n" . $user->user_login . "\n" . $user->user_pass );
 		$secret = bin2hex( random_bytes( 32 ) );
 		$state['secret'] = credential( $secret, 'agent|' . $state['url'] . '|' . $state['user_id'] );
 		if ( is_wp_error( $state['secret'] ) ) { return $state['secret']; }
@@ -431,6 +433,7 @@ function agent_check_in() {
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
+		delete_option( 'sunrise_control_reauth_required' );
 		return array( 'profile_pending' => ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'license_refreshed' => $license_refreshed, 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ), 'transfer_work_available' => $state['transfer_previews'] && ! empty( $response['transfer_work_available'] ), 'transfer_execution_available' => $state['transfer_execution'] && ! empty( $response['transfer_execution_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );

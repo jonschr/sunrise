@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.0 — 2026-09-11
+
+- Pair two connected sites only after a WordPress administrator approves on each site. Keep multiple encrypted, site-specific pairings available to every current administrator without granting access to the rest of the network.
+- Push or pull complete WordPress database tables directly between paired sites, including users, with chunk hashes, private staging, atomic table replacement, retained destination backups, cancellation guards, and local restore.
+- Automatically replace source site/home URLs and filesystem roots inside plain text, JSON, and ordinary PHP-serialized values while preserving serialization lengths. Keep destination Sunrise identity, pairing, cron, and Control state; require Control reauthentication if its owning administrator was replaced.
+
 ## 0.2.30 — 2026-09-11
 
 - Ignore unfamiliar future license identifiers and metadata fields without blocking check-ins; malformed identifiers remain rejected.

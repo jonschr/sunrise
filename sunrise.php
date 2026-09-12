@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Sunrise
- * Description: Authenticated update inventory, automatic-update policies, and remote update jobs.
- * Version: 0.2.30
+ * Description: Authenticated site management, updates, and paired WordPress migrations.
+ * Version: 0.3.0
  * Plugin URI: https://github.com/jonschr/sunrise
  * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
@@ -16,7 +16,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.2.30';
+const VERSION = '0.3.0';
 
 // Discard old cached WordPress.org collisions before the release checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {

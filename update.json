@@ -1,15 +1,15 @@
 {
   "name": "Sunrise",
-  "version": "0.2.30",
+  "version": "0.3.0",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.2.30/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.0/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
     "svg": "https://raw.githubusercontent.com/jonschr/sunrise/main/assets/icon.svg"
   },
   "sections": {
-    "description": "Authenticated update inventory, automatic-update policies, and remote update jobs.",
-    "changelog": "Ignore unfamiliar future license metadata safely while retaining strict input validation."
+    "description": "Authenticated site management, updates, and paired WordPress migrations.",
+    "changelog": "Add persistent two-admin pairing and direct database push/pull with automatic serialized-safe URL/path replacement and recovery tables."
   }
 }
