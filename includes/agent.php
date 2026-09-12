@@ -161,7 +161,12 @@ function agent_schedule( $delay, $user_id = null ) {
 
 /** Apply a cadence change once on upgrade; retain earlier enrollment/job continuation events. */
 function agent_migrate_schedule() {
-	if ( AGENT_INTERVAL === (int) get_option( 'sunrise_agent_interval', 0 ) ) { return; }
+	if ( AGENT_INTERVAL === (int) get_option( 'sunrise_agent_interval', 0 ) ) {
+		foreach ( agent_states() as $user_id => $state ) {
+			if ( agent_owner_valid( $state ) && empty( $state['revoked'] ) ) { agent_schedule( AGENT_INTERVAL, $user_id ); }
+		}
+		return;
+	}
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return; }
 	try {
@@ -508,12 +513,15 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 	if ( ! isset( $states[ $user_id ] ) || ! agent_owner_valid( $states[ $user_id ] ) || ! empty( $states[ $user_id ]['revoked'] ) ) { return; }
 	try {
 		wp_set_current_user( $user_id );
+		// WP-Cron removes a single event before invoking it; reserve its successor before work that may stop the request.
+		agent_schedule( AGENT_INTERVAL );
 		$result = agent_synchronize();
 		$delay = AGENT_INTERVAL;
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();
 			if ( is_array( $data ) && isset( $data['retry_after'] ) ) { $delay = max( $delay, $data['retry_after'] ); }
 		}
+		if ( $delay > AGENT_INTERVAL ) { wp_clear_scheduled_hook( 'sunrise_check_in', array( $user_id ) ); }
 		$state = agent_state();
 		if ( $state && empty( $state['revoked'] ) ) { agent_schedule( $delay ); }
 	} finally { wp_set_current_user( $previous ); }

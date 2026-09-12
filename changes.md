@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.2 — 2026-09-12
+
+- Restore missing owner check-in events during routine WordPress initialization, even when the saved cadence is already current.
+- Schedule each successor before check-in work begins so an interrupted request cannot leave the connection without another event.
+
 ## 0.3.1 — 2026-09-11
 
 - Show the installed Sunrise Client version beneath the Sunrise Control version in the WordPress dashboard.

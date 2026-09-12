@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.1/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.2/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site management, updates, and paired WordPress migrations.",
-    "changelog": "Show the installed Sunrise Client version beneath the Sunrise Control version in the WordPress dashboard."
+    "changelog": "Restore missing check-in events automatically and reserve the next event before synchronization begins."
   }
 }

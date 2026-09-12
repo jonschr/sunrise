@@ -13,7 +13,7 @@ try {
  Sunrise\agent_migrate_schedule();sunrise_schedule_assert( $next === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Repeated requests do not postpone check-in' );
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 60, 'sunrise_check_in', array( $owner ) );$soon = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );delete_option( 'sunrise_agent_interval' );Sunrise\agent_migrate_schedule();
  sunrise_schedule_assert( $soon === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Earlier queued-work events are preserved' );
- wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );delete_option( 'sunrise_agent_interval' );Sunrise\agent_migrate_schedule();sunrise_schedule_assert( wp_next_scheduled( 'sunrise_check_in', array( $owner ) ) > time(), 'Reactivation restores a missing owner event' );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', Sunrise\AGENT_INTERVAL );Sunrise\agent_migrate_schedule();sunrise_schedule_assert( wp_next_scheduled( 'sunrise_check_in', array( $owner ) ) > time(), 'Routine init restores a missing owner event' );
 } finally {
  remove_filter( 'pre_http_request', $block );update_option( 'cron', $cron );
  if ( null === $interval ) { delete_option( 'sunrise_agent_interval' ); } else { update_option( 'sunrise_agent_interval', $interval, true ); }
