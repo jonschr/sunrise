@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.3 — 2026-09-15
+
+- Report successful and failed native automatic updates to Sunrise Control activity for 24 hours.
+
 ## 0.3.2 — 2026-09-12
 
 - Restore missing owner check-in events during routine WordPress initialization, even when the saved cadence is already current.

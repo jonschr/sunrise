@@ -387,6 +387,7 @@ function agent_check_in() {
 				$resolved = failure_resolutions( isset( $state['failure_checks'] ) ? $state['failure_checks'] : array(), $state['pending_report']['inventory'] );
 				if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
 			}
+			if ( ! empty( $state['update_activity'] ) ) { $state['pending_report']['automatic_update_activity'] = automatic_update_activity(); }
 			if ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) {
 				$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
 			}
@@ -425,6 +426,7 @@ function agent_check_in() {
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
 		if ( isset( $response['failure_checks'] ) && ! validate_failure_checks( $response['failure_checks'] ) ) { return new \WP_Error( 'sunrise_failure_checks', 'Invalid failure-resolution checks.' ); }
 		$state['update_failures'] = isset( $response['update_failures'] ) && true === $response['update_failures'];
+		$state['update_activity'] = isset( $response['update_activity'] ) && true === $response['update_activity'];
 		$state['failure_checks'] = isset( $response['failure_checks'] ) ? $response['failure_checks'] : array();
 		if ( isset( $state['pending_report']['automatic_update_failures'] ) ) { $state['update_failure_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['automatic_update_failures'] ) ); }
 		$state['site_profiles'] = isset( $response['site_profiles'] ) && true === $response['site_profiles'];

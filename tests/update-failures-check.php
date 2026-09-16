@@ -1,9 +1,11 @@
 <?php
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() ) { WP_CLI::error( 'Disposable local fixture required.' ); }
 $previous = get_option( 'sunrise_automatic_update_failures', null );
+$previous_activity = get_option( 'sunrise_automatic_update_activity', null );
 $check = function ( $value, $message ) { if ( ! $value ) { throw new RuntimeException( $message ); } };
 try {
  delete_option( 'sunrise_automatic_update_failures' );
+ delete_option( 'sunrise_automatic_update_activity' );
  $item = (object) array( 'plugin' => 'fixture/fixture.php', 'new_version' => '2.0' );
  $result = (object) array( 'item' => $item, 'result' => new WP_Error( 'download_failed', 'License expired: secret-key https://provider.test/?key=secret' ) );
  require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
@@ -24,10 +26,11 @@ try {
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  $result->result = true;do_action( 'automatic_updates_complete', array( 'plugin' => array( $result ) ) );
  $check( array() === Sunrise\automatic_update_failures( array() ), 'Native success must clear native failure' );
+ $activity = Sunrise\automatic_update_activity();$check( 4 === count( $activity ) && 'failed' === $activity[0]['status'] && 'succeeded' === $activity[3]['status'], 'Automatic attempts must remain visible as update activity' );
  $probe = array( 'id' => wp_generate_uuid4(), 'type' => 'plugin', 'installed_id' => 'fixture/fixture.php', 'version' => '2.0' );
  $check( Sunrise\validate_failure_checks( array( $probe ) ), 'Valid probe rejected' );
  $check( array( $probe['id'] ) === Sunrise\failure_resolutions( array( $probe ), $inventory ), 'Higher installed version must resolve central failure' );
  $inventory[0]['version'] = '2.0-RC1';$check( array() === Sunrise\failure_resolutions( array( $probe ), $inventory ), 'Prerelease must not resolve stable target' );
  $probe['version'] = '../unsafe';$check( ! Sunrise\validate_failure_checks( array( $probe ) ), 'Invalid probe accepted' );
  WP_CLI::success( 'Native failure capture, deduplication, secret-free reasons, successful auto/manual resolution and WordPress version comparison passed.' );
-} finally { if ( null === $previous ) { delete_option( 'sunrise_automatic_update_failures' ); } else { update_option( 'sunrise_automatic_update_failures', $previous, false ); } }
+} finally { if ( null === $previous ) { delete_option( 'sunrise_automatic_update_failures' ); } else { update_option( 'sunrise_automatic_update_failures', $previous, false ); } if ( null === $previous_activity ) { delete_option( 'sunrise_automatic_update_activity' ); } else { update_option( 'sunrise_automatic_update_activity', $previous_activity, false ); } }

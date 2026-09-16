@@ -18,6 +18,7 @@ function automatic_failure_reason( $error ) {
 }
 function capture_automatic_update_failures( $results ) {
 	$failures = get_option( 'sunrise_automatic_update_failures', array() );
+	$activity = get_option( 'sunrise_automatic_update_activity', array() );
 	foreach ( array( 'core', 'plugin', 'theme' ) as $type ) {
 		foreach ( isset( $results[ $type ] ) && is_array( $results[ $type ] ) ? $results[ $type ] : array() as $result ) {
 			if ( ! is_object( $result ) || ! isset( $result->item ) || ! is_object( $result->item ) || ! property_exists( $result, 'result' ) ) { continue; }
@@ -25,7 +26,9 @@ function capture_automatic_update_failures( $results ) {
 			$version = 'core' === $type && isset( $result->item->current ) ? $result->item->current : ( isset( $result->item->new_version ) ? $result->item->new_version : '' );
 			if ( ! is_string( $id ) || ! $id || strlen( $id ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $id ) || ! is_string( $version ) || ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $version ) ) { continue; }
 			$key = $type . ':' . $id;
-			if ( $result->result && ! is_wp_error( $result->result ) ) {
+			$success = $result->result && ! is_wp_error( $result->result );
+			$activity[] = array( 'id' => wp_generate_uuid4(), 'type' => $type, 'installed_id' => $id, 'version' => $version, 'status' => $success ? 'succeeded' : 'failed', 'code' => $success ? 'updated' : automatic_failure_reason( $result->result ), 'updated_at' => time() );
+			if ( $success ) {
 				if ( isset( $failures[ $key ] ) && version_compare( $version, $failures[ $key ]['version'], '>=' ) ) { unset( $failures[ $key ] ); }
 			} else {
 				$failures[ $key ] = array( 'type' => $type, 'installed_id' => $id, 'version' => $version, 'code' => automatic_failure_reason( $result->result ), 'failed_at' => time() );
@@ -37,8 +40,14 @@ function capture_automatic_update_failures( $results ) {
 	// ponytail: keep the 100 most recent distinct automatic failures per installation; raise the cap if needed.
 	foreach ( array_slice( $failures, 0, 100 ) as $failure ) { $stored[ $failure['type'] . ':' . $failure['installed_id'] ] = $failure; }
 	update_option( 'sunrise_automatic_update_failures', $stored, false );
+	$activity = array_values( array_filter( $activity, function ( $item ) { return isset( $item['updated_at'] ) && $item['updated_at'] > time() - DAY_IN_SECONDS; } ) );
+	update_option( 'sunrise_automatic_update_activity', array_slice( $activity, -100 ), false );
 }
 add_action( 'automatic_updates_complete', __NAMESPACE__ . '\\capture_automatic_update_failures' );
+
+function automatic_update_activity() {
+	return array_values( array_filter( get_option( 'sunrise_automatic_update_activity', array() ), function ( $item ) { return isset( $item['updated_at'] ) && $item['updated_at'] > time() - DAY_IN_SECONDS; } ) );
+}
 
 function failure_installed_versions( $inventory ) {
 	$versions = array();
