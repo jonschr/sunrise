@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.7/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.8/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site management, updates, and paired WordPress migrations.",
-    "changelog": "Finish approved reconnections after migration cleanup changes local identity files or administrator passwords."
+    "changelog": "Recover an approved reconnection when its locally saved enrollment ID was lost during migration or concurrent updates."
   }
 }

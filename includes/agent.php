@@ -162,10 +162,10 @@ function agent_reconnect( $state ) {
 
 /** A started reconnection may finish after migration cleanup changes its original local markers. */
 function agent_reconnectable( $state ) {
-	if ( installation_salt_changed() ) { return true; }
-	if ( empty( $state['reconnect']['enrollment_id'] ) || empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
+	if ( empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
 	$identity = installation_identity(); $anchor = installation_anchor();
-	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
+	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) )
+		&& ( ! empty( $state['reconnect'] ) || installation_salt_changed() );
 }
 
 function agent_enroll( $intent = null ) {

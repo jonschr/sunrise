@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.8 — 2026-09-18
+
+- Re-submit a started same-site reconnection idempotently when migration or concurrent update state lost its saved enrollment ID, then exchange the existing Control approval.
+
 ## 0.3.7 — 2026-09-18
 
 - Continue an already-started, Control-approved reconnection after migration cleanup removes the identity anchor or changes the administrator password hash.
