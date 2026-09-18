@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.6 — 2026-09-18
+
+- Exchange approved same-site reconnections directly during an ordinary WordPress request, without relying on WordPress cron or host shutdown processing.
+
 ## 0.3.5 — 2026-09-18
 
 - Retry an approved salt-change reconnection after ordinary WordPress requests when the migrated host does not execute WordPress cron.

@@ -27,6 +27,7 @@ $restore = function () use ( $wpdb, $prefix, $saved, $cron, $original_user, $sal
 	wp_set_current_user( $original_user );
 	foreach ( $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $prefix ) ) as $name ) { delete_option( $name ); }
 	foreach ( $saved as $name => $value ) { add_option( $name, $value, '', false ); }
+	foreach ( $saved['sunrise_agents'] ?? array() as $user_id => $state ) { delete_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ); }
 	if ( null === $anchor_bytes ) { if ( file_exists( $anchor_path ) ) { unlink( $anchor_path ); } }
 	else { file_put_contents( $anchor_path, $anchor_bytes ); chmod( $anchor_path, 0640 ); }
 	update_option( 'cron', $cron );
@@ -62,8 +63,7 @@ try {
 	$restore(); $identity = Sunrise\installation_identity(); $id = $identity['id'];
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );
-	sunrise_identity_assert( Sunrise\agent_maybe_schedule_reconnect() && false !== has_action( 'shutdown', 'Sunrise\\agent_run_reconnect_fallbacks' ), 'Salt rotation schedules a throttled request-driven fallback when WordPress cron is disabled' );
-	remove_action( 'shutdown', 'Sunrise\\agent_run_reconnect_fallbacks' ); unset( $GLOBALS['sunrise_reconnect_fallback_users'] );
+	sunrise_identity_assert( Sunrise\agent_maybe_schedule_reconnect() && $calls > 0, 'Salt rotation attempts throttled request-driven recovery when WordPress cron is disabled' );
 	foreach ( Sunrise\agent_states() as $user_id => $state ) { delete_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ); }
 	remove_filter( 'pre_http_request', $block ); $approved = false; $enrollment_id = wp_generate_uuid4();
 	$reconnect = function ( $pre, $args, $url ) use ( &$calls, &$approved, $enrollment_id ) {
@@ -79,7 +79,8 @@ try {
 	$result = Sunrise\agent_reconnect( Sunrise\agent_state() );
 	sunrise_identity_assert( is_wp_error( $result ) && 'sunrise_reconnect_pending' === $result->get_error_code() && ! empty( Sunrise\agent_state()['reconnect']['enrollment_id'] ), 'Salt-only moves wait for Control reconnection approval' );
 	$approved = true; $before_generation = Sunrise\agent_state()['generation'];
-	sunrise_identity_assert( true === Sunrise\agent_reconnect( Sunrise\agent_state() ) && true === Sunrise\installation_guard() && Sunrise\agent_state()['generation'] === $before_generation + 1, 'Control approval rotates credentials while retaining the local connection' );
+	Sunrise\agent_maybe_schedule_reconnect();
+	sunrise_identity_assert( true === Sunrise\installation_guard() && Sunrise\agent_state()['generation'] === $before_generation + 1, 'An ordinary request exchanges Control approval without WordPress cron' );
 	remove_filter( 'pre_http_request', $reconnect ); add_filter( 'pre_http_request', $block ); $calls = 0;
 	$result = Sunrise\installation_resolve( 'same', $id, true );
 	sunrise_identity_assert( ! is_wp_error( $result ) && $id === $result['installation_id'] && true === Sunrise\installation_guard()
