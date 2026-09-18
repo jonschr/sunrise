@@ -196,7 +196,8 @@ function agent_reconnect( $state ) {
 function agent_reconnectable( $state ) {
 	if ( empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
 	$identity = installation_identity(); $anchor = installation_anchor();
-	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
+	$markers = is_array( $identity ) && ! empty( $identity['id'] ) ? installation_markers( $identity['id'] ) : array();
+	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && isset( $identity['url_hash'] ) && hash_equals( $identity['url_hash'], $markers['url_hash'] ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
 }
 
 function agent_enroll( $intent = null ) {
@@ -620,6 +621,14 @@ function agent_check_in() {
 		$state['update_failures'] = isset( $response['update_failures'] ) && true === $response['update_failures'];
 		$state['update_activity'] = isset( $response['update_activity'] ) && true === $response['update_activity'];
 		$state['failure_checks'] = isset( $response['failure_checks'] ) ? $response['failure_checks'] : array();
+		if ( isset( $response['sunrise_latest_version'] ) ) {
+			$latest = $response['sunrise_latest_version'];
+			if ( ! is_string( $latest ) || ! preg_match( '/^\d+\.\d+\.\d+$/D', $latest ) ) { return new \WP_Error( 'sunrise_release_schema', 'Invalid Sunrise release version.' ); }
+			if ( ( $state['sunrise_latest_version'] ?? null ) !== $latest ) {
+				$offer = version_compare( VERSION, $latest, '>=' ) ? null : plugin_update_check( true );
+				if ( version_compare( VERSION, $latest, '>=' ) || ( is_object( $offer ) && isset( $offer->version ) && version_compare( $offer->version, $latest, '>=' ) ) ) { $state['sunrise_latest_version'] = $latest; }
+			}
+		}
 		if ( isset( $state['pending_report']['automatic_update_failures'] ) ) { $state['update_failure_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['automatic_update_failures'] ) ); }
 		$state['site_profiles'] = isset( $response['site_profiles'] ) && true === $response['site_profiles'];
 		if ( isset( $state['pending_report']['site_profile'] ) ) { $state['site_profile_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['site_profile'] ) ); }

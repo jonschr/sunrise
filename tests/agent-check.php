@@ -19,7 +19,7 @@ $mock_wire = array( 'generation' => $mock_document['generation'], 'document_json
 $mock_wire['hash'] = hash( 'sha256', $mock_wire['document_json'] );
 $reply = function ( $pre, $args ) use ( &$reports, $mock_wire ) {
 	$report = json_decode( $args['body'], true ); $reports[] = $report;
-	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'sunrise_latest_version' => Sunrise\VERSION, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 };
 try {
 	$loaded_wp_version = $GLOBALS['wp_version'];
@@ -61,6 +61,7 @@ try {
 	sunrise_agent_assert( ! isset( $reports[0]['automatic_update_failures'] ) && isset( $reports[1]['automatic_update_failures'] ), 'Automatic failures are negotiated before the snapshot is sent' );
 	$reports = array(); $result = Sunrise\agent_sync();
 	sunrise_agent_assert( Sunrise\agent_state()['wake_registered'] && ! isset( $reports[0]['wake_key'] ), 'Acknowledged wake key is omitted from routine reports' );
+	sunrise_agent_assert( Sunrise\VERSION === Sunrise\agent_state()['sunrise_latest_version'], 'Control broadcasts the current Sunrise release during routine check-ins' );
 	sunrise_agent_assert( ! is_wp_error( $result ) && 1 === count( $reports ) && $next === wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ), 'Manual sync works before cron is due; unchanged policy needs one request' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'], $reports[0]['automatic_update_failures'] ), 'Acknowledged unchanged profile is omitted from later reports' );
 	remove_filter( 'pre_http_request', $reply );

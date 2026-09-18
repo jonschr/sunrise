@@ -201,23 +201,18 @@ function admin_page() {
 		$identity_id = $anchor_id ? $anchor_id : ( is_array( $identity ) && isset( $identity['id'] ) && is_string( $identity['id'] ) ? $identity['id'] : '' );
 		$database_replaced = $anchor_id && is_array( $identity ) && isset( $identity['id'] ) && $anchor_id !== $identity['id'];
 		$normal_reauthentication = agent_state() && agent_reconnectable( agent_state() );
-		echo '<section class="sunrise-recovery"><h2>' . esc_html__( 'Connection recovery needed', 'sunrise' ) . '</h2>';
-		if ( $normal_reauthentication ) { echo '<p>' . esc_html__( 'This appears to be the same site after a move or security-key change. Use Re-authenticate with Sunrise Control below. That replaces only the connection credential and retains this site record, policies, and history.', 'sunrise' ) . '</p>'; }
-		else { echo '<p>' . esc_html__( 'The saved installation identity does not match this WordPress installation. Use the advanced recovery below only after a clone or database replacement.', 'sunrise' ) . '</p>'; }
+		echo '<section class="sunrise-recovery"><h2>' . esc_html__( $normal_reauthentication ? 'Connection recovery needed' : 'Connect as a new site', 'sunrise' ) . '</h2>';
+		if ( $normal_reauthentication ) { echo '<p>' . esc_html__( 'This appears to be the same site after a move or security-key change. Re-authenticate below to retain its site record, policies, and history.', 'sunrise' ) . '</p>'; }
+		else { echo '<p>' . esc_html__( 'This WordPress installation no longer matches the connected site. Connect it as a new site; the original site in Sunrise Control will not be changed.', 'sunrise' ) . '</p>'; }
 		$recovery_error = get_option( 'sunrise_reconnect_errors', array() )[ get_current_user_id() ] ?? null;
 		if ( is_array( $recovery_error ) && isset( $recovery_error['code'], $recovery_error['at'] ) ) {
 			echo '<p>' . esc_html( sprintf( __( 'Last automatic recovery attempt: %1$s at %2$s.', 'sunrise' ), $recovery_error['code'], wp_date( 'Y-m-d H:i:s T', $recovery_error['at'] ) ) ) . '</p>';
 		}
 		if ( ! $normal_reauthentication ) {
-			echo '<details><summary>' . esc_html__( 'Advanced clone or database recovery', 'sunrise' ) . '</summary>';
-			if ( $database_replaced ) { echo '<p>' . esc_html__( 'The database belongs to a different installation. Recovery retains this destination’s installation ID and removes the copied local connection.', 'sunrise' ) . '</p>'; }
-			if ( ! $anchor_id ) { echo '<p>' . esc_html__( 'The installation identity file is missing or unreadable. WordPress must be able to write wp-content/sunrise-installation.php.', 'sunrise' ) . '</p>'; }
-			echo '<p>' . esc_html__( 'This clears local Sunrise connections, policies, snapshots, and jobs. It does not disconnect the original site in Control.', 'sunrise' ) . '</p>';
-			form_start( 'local', 'identity_resolve' ); echo '<input type="hidden" name="installation_id" value="' . esc_attr( $identity_id ) . '">';
-			if ( $database_replaced ) { echo '<input type="hidden" name="identity_kind" value="same">'; }
-			else { echo '<p><label for="sunrise-identity-kind">' . esc_html__( 'Recovery type', 'sunrise' ) . '</label> <select id="sunrise-identity-kind" name="identity_kind"><option value="clone">' . esc_html__( 'Cloned site — create a separate identity', 'sunrise' ) . '</option><option value="same"' . ( ! $anchor_id ? ' disabled' : '' ) . '>' . esc_html__( 'Replaced database — retain this destination identity', 'sunrise' ) . '</option></select></p>'; }
-			echo '<p><label><input type="checkbox" name="confirm_identity" value="1" required> ' . esc_html__( 'Clear this installation’s local Sunrise state.', 'sunrise' ) . '</label></p>';
-			submit_button( __( 'Reset local Sunrise identity', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
+			form_start( 'local', 'identity_resolve' );
+			echo '<input type="hidden" name="installation_id" value="' . esc_attr( $identity_id ) . '"><input type="hidden" name="identity_kind" value="' . esc_attr( $database_replaced ? 'same' : 'clone' ) . '"><input type="hidden" name="confirm_identity" value="1">';
+			submit_button( __( 'Connect as a new site', 'sunrise' ), 'primary', 'submit', false ); echo '</form></section>';
+			diagnostic_log_section(); echo '</div>'; return;
 		}
 		echo '</section>';
 	}

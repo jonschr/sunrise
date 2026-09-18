@@ -3,6 +3,7 @@
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() ) { WP_CLI::error( 'Disposable local fixture required.' ); }
 $checker = Sunrise\plugin_update_checker();
 $saved = get_site_option( 'external_updates-sunrise', null );
+$saved_native = get_site_transient( 'update_plugins' );
 $calls = array(); $mode = 'release'; $offered = '999.0.0';
 $asset = 'https://github.com/jonschr/sunrise/releases/download/v' . $offered . '/sunrise.zip';
 $transport = function ( $pre, $options, $url ) use ( &$calls, &$mode, $asset, $offered ) {
@@ -26,6 +27,10 @@ try {
  Sunrise\plugin_update_check( true ); sunrise_update_assert( count( $calls ) === $before + 1, 'Requested refresh forces a Sunrise metadata check' );
  $native = apply_filters( 'site_transient_update_plugins', $collision );
  sunrise_update_assert( $asset === $native->response['sunrise/sunrise.php']->package && $offered === $native->response['sunrise/sunrise.php']->new_version, 'Own update survives collision protection in the native WordPress update list' );
+ require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
+ $native->last_checked = time(); $native->checked = array_map( function ( $plugin ) { return $plugin['Version']; }, get_plugins() ); set_site_transient( 'update_plugins', $native );
+ $before = count( $calls ); $stale = Sunrise\install_update( array( 'type' => 'plugin', 'id' => 'sunrise/sunrise.php', 'version' => '998.0.0' ) );
+ sunrise_update_assert( is_wp_error( $stale ) && 'sunrise_offer_changed' === $stale->get_error_code() && count( $calls ) > $before, 'A requested Sunrise installation refreshes release metadata before validating its exact version' );
  require_once WP_PLUGIN_DIR . '/sunrise/includes/api.php';
  $reported = array_values( array_filter( Sunrise\inventory()['plugins'], function ( $item ) { return 'sunrise/sunrise.php' === $item['id']; } ) );
  sunrise_update_assert( 1 === count( $reported ) && true === $reported[0]['update_available'] && $offered === $reported[0]['update']['version'], 'Automated inventory reports the same Sunrise offer shown by WordPress' );
@@ -49,4 +54,5 @@ try {
 } finally {
  remove_filter( 'pre_http_request', $transport ); $checker->resetUpdateState();
  if ( null !== $saved ) { update_site_option( 'external_updates-sunrise', $saved ); }
+ false === $saved_native ? delete_site_transient( 'update_plugins' ) : set_site_transient( 'update_plugins', $saved_native );
 }

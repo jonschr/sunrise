@@ -47,10 +47,12 @@ try {
 	add_filter( 'site_url', $url );
 	$agent = Sunrise\agent_state(); $agent['url'] = $url(); update_option( 'sunrise_agents', array( get_current_user_id() => $agent ), false );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'URL hash detects a clone even when a migrator rewrites the saved enrollment URL' );
-	sunrise_identity_assert( is_wp_error( Sunrise\agent_sync() ) && is_wp_error( Sunrise\agent_enroll() ) && 1 === $calls, 'Changed installation can only request a separately approved anonymous reconnection' );
+	require_once WP_PLUGIN_DIR . '/sunrise/includes/admin.php'; ob_start(); Sunrise\admin_page(); $html = ob_get_clean();
+	sunrise_identity_assert( false !== strpos( $html, 'Connect as a new site' ) && false === strpos( $html, 'Advanced clone or database recovery' ) && false === strpos( $html, 'Re-authenticate with Sunrise Control' ), 'A changed-domain clone gets ordinary new-site enrollment without identity choices' );
+	sunrise_identity_assert( is_wp_error( Sunrise\agent_sync() ) && is_wp_error( Sunrise\agent_enroll() ) && 0 === $calls, 'Changed installation cannot reuse the copied connection before new-site enrollment' );
 	sunrise_identity_assert( 'off' === Sunrise\item_policy( 'plugins', 'any/plugin.php' ) && ! Sunrise\filter_core( true, 'minor' ), 'Changed installation blocks managed automatic updates' );
 	sunrise_identity_assert( is_wp_error( Sunrise\enqueue_job( array( 'request_id' => wp_generate_uuid4(), 'action' => 'refresh' ) ) )
-		&& is_wp_error( Sunrise\controller_request( array(), 'inventory' ) ) && 1 === $calls, 'Queued work and peer requests share the identity guard' );
+		&& is_wp_error( Sunrise\controller_request( array(), 'inventory' ) ) && 0 === $calls, 'Queued work and peer requests share the identity guard' );
 	$calls = 0;
 	remove_filter( 'site_url', $url );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'Restoring the URL does not silently clear a detected mismatch' );

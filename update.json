@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.11/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.12/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Recover automatically when a restored site database has an older outbound check-in sequence than Control."
+    "changelog": "Keep Sunrise release offers current during check-ins and simplify changed-domain clones to ordinary new-site enrollment."
   }
 }

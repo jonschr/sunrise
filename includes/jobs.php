@@ -292,6 +292,7 @@ function install_update( $task ) {
 		if ( 'plugin' === $type ) {
 			$items = get_plugins();
 			$current_version = isset( $items[ $id ] ) ? $items[ $id ]['Version'] : '';
+			if ( 'sunrise/sunrise.php' === $id ) { plugin_update_check( true ); }
 			wp_update_plugins();
 		} else {
 			$theme = wp_get_theme( $id );
