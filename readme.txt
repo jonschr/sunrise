@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.4
+Stable tag: 0.3.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,10 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.5 =
+* Retry salt-change reconnection after ordinary site requests when a migrated host does not run WordPress cron.
+* Keep explicit Control exclusions authoritative over host and provider automatic-update selections.
 
 = 0.3.4 =
 * Request an administrator-approved Control reconnection after a same-site move changes WordPress salts.

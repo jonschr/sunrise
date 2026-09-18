@@ -98,6 +98,9 @@ try {
 	WP_Upgrader::release_lock( 'sunrise_policy' );
 	Sunrise\save_policy( array( 'site' => 'on', 'plugins' => array( $fixture => 'off' ) ) );
 	sunrise_check( false === apply_filters( 'auto_update_plugin', true, (object) array( 'plugin' => $fixture ) ), 'Per-plugin exclusion overrides site-on' );
+	$provider_enable = '__return_true'; add_filter( 'auto_update_plugin', $provider_enable, PHP_INT_MAX - 1 );
+	sunrise_check( false === apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => $fixture ) ), 'Per-plugin exclusion overrides later provider selection' );
+	remove_filter( 'auto_update_plugin', $provider_enable, PHP_INT_MAX - 1 );
 	Sunrise\save_policy( array( 'plugins' => array( $fixture => 'inherit' ), 'core' => 'minor' ) );
 	sunrise_check( true === apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => $fixture ) ), 'Removing exclusion restores site policy' );
 	sunrise_check( false === apply_filters( 'auto_update_plugin', true, (object) array( 'plugin' => $fixture, 'disable_autoupdate' => true ) ), 'Provider-disabled offer respected' );

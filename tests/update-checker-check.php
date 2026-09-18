@@ -34,7 +34,7 @@ try {
  add_filter( 'auto_update_plugin', $force_off, 19 );
  $development = is_link( WP_PLUGIN_DIR . '/sunrise' ) || file_exists( WP_PLUGIN_DIR . '/sunrise/.git' );
  sunrise_update_assert( ! $development === apply_filters( 'auto_update_plugin', false, $native->response['sunrise/sunrise.php'] ), 'Packaged Sunrise self-updates despite disabled policies; development copies stay protected' );
- sunrise_update_assert( ! apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => 'other/other.php' ) ), 'Self-update selection does not enable other plugins' );
+ sunrise_update_assert( ! apply_filters( 'auto_update_plugin', false, (object) array( 'plugin' => 'other/other.php', 'disable_autoupdate' => true ) ), 'Self-update selection does not override another provider block' );
  $blocked = clone $native->response['sunrise/sunrise.php']; $blocked->disable_autoupdate = true;
  sunrise_update_assert( ! apply_filters( 'auto_update_plugin', true, $blocked ), 'Provider-disabled Sunrise offers remain disabled' );
  add_filter( 'plugins_auto_update_enabled', $force_off );

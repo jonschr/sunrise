@@ -62,6 +62,9 @@ try {
 	$restore(); $identity = Sunrise\installation_identity(); $id = $identity['id'];
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );
+	sunrise_identity_assert( Sunrise\agent_maybe_schedule_reconnect() && false !== has_action( 'shutdown', 'Sunrise\\agent_run_reconnect_fallbacks' ), 'Salt rotation schedules a throttled request-driven fallback when WordPress cron is disabled' );
+	remove_action( 'shutdown', 'Sunrise\\agent_run_reconnect_fallbacks' ); unset( $GLOBALS['sunrise_reconnect_fallback_users'] );
+	foreach ( Sunrise\agent_states() as $user_id => $state ) { delete_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ); }
 	remove_filter( 'pre_http_request', $block ); $approved = false; $enrollment_id = wp_generate_uuid4();
 	$reconnect = function ( $pre, $args, $url ) use ( &$calls, &$approved, $enrollment_id ) {
 		++$calls; $data = json_decode( $args['body'], true );

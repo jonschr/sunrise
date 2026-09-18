@@ -40,4 +40,4 @@ add_filter( 'auto_update_plugin', function ( $update, $item ) {
 		return false;
 	}
 	return empty( $item->disable_autoupdate ) && wp_is_auto_update_enabled_for_type( 'plugin' );
-}, 20, 2 );
+}, PHP_INT_MAX, 2 );

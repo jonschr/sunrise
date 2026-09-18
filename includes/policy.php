@@ -99,6 +99,7 @@ function agent_policy_conflict( $state ) {
 
 function filter_item( $update, $item, $type ) {
 	$id   = isset( $item->{$type} ) ? $item->{$type} : '';
+	if ( 'plugin' === $type && plugin_basename( dirname( __DIR__ ) . '/sunrise.php' ) === $id ) { return $update; }
 	$mode = item_policy( $type . 's', $id );
 	if ( 'inherit' === $mode ) {
 		return $update;
@@ -112,10 +113,10 @@ function filter_item( $update, $item, $type ) {
 
 add_filter( 'auto_update_plugin', function ( $update, $item ) {
 	return filter_item( $update, $item, 'plugin' );
-}, 5, 2 );
+}, PHP_INT_MAX, 2 );
 add_filter( 'auto_update_theme', function ( $update, $item ) {
 	return filter_item( $update, $item, 'theme' );
-}, 5, 2 );
+}, PHP_INT_MAX, 2 );
 
 function filter_core( $update, $kind ) {
 	$policy = policy();

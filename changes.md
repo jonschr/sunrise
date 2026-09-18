@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.5 — 2026-09-18
+
+- Retry an approved salt-change reconnection after ordinary WordPress requests when the migrated host does not execute WordPress cron.
+- Make Control's explicit plugin and theme exclusions win over later host and provider automatic-update filters.
+
 ## 0.3.4 — 2026-09-18
 
 - Detect same-URL moves that retain the installation anchor but replace WordPress salts, then send a bounded reconnection request to Control.

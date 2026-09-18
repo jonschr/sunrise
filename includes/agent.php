@@ -206,6 +206,34 @@ function agent_schedule( $delay, $user_id = null ) {
 	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) { wp_schedule_single_event( time() + max( 30, $delay ) + wp_rand( 0, 30 ), 'sunrise_check_in', $args ); }
 }
 
+/** Recover approved same-site moves even when the new host does not run WordPress cron. */
+function agent_maybe_schedule_reconnect() {
+	$states = agent_states();
+	if ( ! $states || ! installation_salt_changed() ) { return false; }
+	$scheduled = false;
+	foreach ( $states as $user_id => $state ) {
+		$key = 'sunrise_reconnect_fallback_' . (int) $user_id;
+		if ( ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || get_transient( $key ) ) { continue; }
+		set_transient( $key, 1, AGENT_INTERVAL );
+		$GLOBALS['sunrise_reconnect_fallback_users'][] = (int) $user_id;
+		$scheduled = true;
+	}
+	if ( $scheduled ) { add_action( 'shutdown', __NAMESPACE__ . '\\agent_run_reconnect_fallbacks' ); }
+	return $scheduled;
+}
+
+function agent_run_reconnect_fallbacks() {
+	$users = array_unique( $GLOBALS['sunrise_reconnect_fallback_users'] ?? array() );
+	unset( $GLOBALS['sunrise_reconnect_fallback_users'] );
+	$previous = get_current_user_id();
+	foreach ( $users as $user_id ) {
+		wp_set_current_user( $user_id );
+		agent_check_in();
+	}
+	wp_set_current_user( $previous );
+}
+add_action( 'init', __NAMESPACE__ . '\\agent_maybe_schedule_reconnect', 20 );
+
 /** Apply a cadence change once on upgrade; retain earlier enrollment/job continuation events. */
 function agent_migrate_schedule() {
 	if ( AGENT_INTERVAL === (int) get_option( 'sunrise_agent_interval', 0 ) ) {
