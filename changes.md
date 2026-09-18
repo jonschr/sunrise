@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.4 — 2026-09-18
+
+- Detect same-URL moves that retain the installation anchor but replace WordPress salts, then send a bounded reconnection request to Control.
+- Rotate the connection credential only after a Control administrator approves the existing site record, preserving local policy and check-in sequence state.
+
 ## 0.3.3 — 2026-09-15
 
 - Report successful and failed native automatic updates to Sunrise Control activity for 24 hours.

@@ -84,6 +84,15 @@ function installation_guard() {
 	return new \WP_Error( 'sunrise_identity_review', 'This installation changed. Review its identity in Sunrise before reconnecting.', array( 'status' => 409 ) );
 }
 
+/** A same-URL installation with its anchor intact may request credential rotation from Control. */
+function installation_salt_changed() {
+	$identity = installation_identity();
+	if ( ! is_array( $identity ) || empty( $identity['id'] ) || $identity['id'] !== installation_anchor() || ! isset( $identity['url_hash'], $identity['salt_check'] ) ) { return false; }
+	$markers = installation_markers( $identity['id'] );
+	return is_string( $identity['url_hash'] ) && hash_equals( $identity['url_hash'], $markers['url_hash'] )
+		&& is_string( $identity['salt_check'] ) && ! hash_equals( $identity['salt_check'], $markers['salt_check'] );
+}
+
 /** Explicit local recovery. Never revoke remotely using credentials copied from another site. */
 function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 	// After a database replacement its recorded connection owner is also untrusted/copied.

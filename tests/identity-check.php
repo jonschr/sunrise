@@ -62,6 +62,22 @@ try {
 	$restore(); $identity = Sunrise\installation_identity(); $id = $identity['id'];
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );
+	remove_filter( 'pre_http_request', $block ); $approved = false; $enrollment_id = wp_generate_uuid4();
+	$reconnect = function ( $pre, $args, $url ) use ( &$calls, &$approved, $enrollment_id ) {
+		++$calls; $data = json_decode( $args['body'], true );
+		if ( Sunrise\agent_url() . '/v1/enrollments' === $url ) {
+			sunrise_identity_assert( isset( $data['reconnect_site_id'], $data['reconnect_generation'], $data['installation_id'] ), 'Salt rotation announces the existing connection without its old credential' );
+			return array( 'response' => array( 'code' => 201 ), 'headers' => array(), 'body' => wp_json_encode( array( 'id' => $enrollment_id, 'approval_url' => Sunrise\agent_url() . '/?enrollment=' . $enrollment_id, 'phrase' => 'reconnect' ) ) );
+		}
+		$state = Sunrise\agent_state();
+		return array( 'response' => array( 'code' => $approved ? 200 : 202 ), 'headers' => array(), 'body' => wp_json_encode( $approved ? array( 'status' => 'approved', 'account_id' => $state['account_id'], 'network_id' => $state['network_id'], 'site_id' => $state['site_id'], 'generation' => $state['generation'] + 1 ) : array( 'status' => 'pending' ) ) );
+	};
+	add_filter( 'pre_http_request', $reconnect, 10, 3 );
+	$result = Sunrise\agent_reconnect( Sunrise\agent_state() );
+	sunrise_identity_assert( is_wp_error( $result ) && 'sunrise_reconnect_pending' === $result->get_error_code() && ! empty( Sunrise\agent_state()['reconnect']['enrollment_id'] ), 'Salt-only moves wait for Control reconnection approval' );
+	$approved = true; $before_generation = Sunrise\agent_state()['generation'];
+	sunrise_identity_assert( true === Sunrise\agent_reconnect( Sunrise\agent_state() ) && true === Sunrise\installation_guard() && Sunrise\agent_state()['generation'] === $before_generation + 1, 'Control approval rotates credentials while retaining the local connection' );
+	remove_filter( 'pre_http_request', $reconnect ); add_filter( 'pre_http_request', $block ); $calls = 0;
 	$result = Sunrise\installation_resolve( 'same', $id, true );
 	sunrise_identity_assert( ! is_wp_error( $result ) && $id === $result['installation_id'] && true === Sunrise\installation_guard()
 		&& ! Sunrise\agent_state() && 0 === $calls, 'Existing-site recovery retains identity but requires fresh enrollment after salt rotation' );
