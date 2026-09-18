@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.10/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.11/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Use local connection settings with direct check-in and re-authentication controls, plus a copyable privacy-safe diagnostic history."
+    "changelog": "Recover automatically when a restored site database has an older outbound check-in sequence than Control."
   }
 }

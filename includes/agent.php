@@ -129,7 +129,9 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 	if ( $code < 200 || $code >= 300 || ! is_array( $body ) ) {
 		$remote_code = isset( $body['error']['code'] ) && is_string( $body['error']['code'] ) && preg_match( '/^[a-z_]{1,80}$/D', $body['error']['code'] ) ? $body['error']['code'] : null;
 		agent_log( 'request_rejected', array( 'endpoint' => $endpoint, 'method' => $method, 'status' => $code, 'remote_code' => $remote_code ) );
-		return new \WP_Error( 'sunrise_agent_http', 'Central service rejected the request.', array( 'status' => $code, 'remote_code' => $remote_code, 'retry_after' => max( 60, (int) wp_remote_retrieve_header( $response, 'retry-after' ) ) ) );
+		$error_data = array( 'status' => $code, 'remote_code' => $remote_code, 'retry_after' => max( 60, (int) wp_remote_retrieve_header( $response, 'retry-after' ) ) );
+		if ( 'sequence_conflict' === $remote_code && isset( $body['error']['server_sequence'] ) && is_int( $body['error']['server_sequence'] ) && $body['error']['server_sequence'] >= 0 ) { $error_data['server_sequence'] = $body['error']['server_sequence']; }
+		return new \WP_Error( 'sunrise_agent_http', 'Central service rejected the request.', $error_data );
 	}
 	return $body;
 }
@@ -557,40 +559,50 @@ function agent_check_in() {
 			if ( 'approved' !== $assignment['status'] ) { return new \WP_Error( 'sunrise_approval_pending', 'Approve this site in Sunrise Control before finishing the connection.' ); }
 			foreach ( array( 'account_id', 'network_id', 'site_id', 'generation' ) as $key ) { $state[ $key ] = $assignment[ $key ]; }
 		}
-		// Retain the exact report before sending so a lost HTTP response can be retried safely.
-		if ( empty( $state['pending_report'] ) ) {
-			plugin_update_check();
-			$state['pending_report'] = array( 'protocol_version' => 1, 'sequence' => $state['sequence'] + 1,
-				'inventory' => agent_inventory(), 'local_pause' => ! empty( $state['paused'] ) );
-			if ( ! empty( $state['update_failures'] ) ) {
-				$failures = automatic_update_failures( $state['pending_report']['inventory'] );
-				if ( hash( 'sha256', wp_json_encode( $failures ) ) !== ( isset( $state['update_failure_hash'] ) ? $state['update_failure_hash'] : '' ) ) { $state['pending_report']['automatic_update_failures'] = $failures; }
-				$resolved = failure_resolutions( isset( $state['failure_checks'] ) ? $state['failure_checks'] : array(), $state['pending_report']['inventory'] );
-				if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
+		$sequence_rebased = false;
+		while ( true ) {
+			// Retain the exact report before sending so a lost HTTP response can be retried safely.
+			if ( empty( $state['pending_report'] ) ) {
+				plugin_update_check();
+				$state['pending_report'] = array( 'protocol_version' => 1, 'sequence' => $state['sequence'] + 1,
+					'inventory' => agent_inventory(), 'local_pause' => ! empty( $state['paused'] ) );
+				if ( ! empty( $state['update_failures'] ) ) {
+					$failures = automatic_update_failures( $state['pending_report']['inventory'] );
+					if ( hash( 'sha256', wp_json_encode( $failures ) ) !== ( isset( $state['update_failure_hash'] ) ? $state['update_failure_hash'] : '' ) ) { $state['pending_report']['automatic_update_failures'] = $failures; }
+					$resolved = failure_resolutions( isset( $state['failure_checks'] ) ? $state['failure_checks'] : array(), $state['pending_report']['inventory'] );
+					if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
+				}
+				if ( ! empty( $state['update_activity'] ) ) { $state['pending_report']['automatic_update_activity'] = automatic_update_activity(); }
+				if ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) {
+					$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
+				}
+				if ( ! empty( $state['site_profiles'] ) ) {
+					$profile = agent_site_profile();
+					if ( hash( 'sha256', wp_json_encode( $profile ) ) !== ( isset( $state['site_profile_hash'] ) ? $state['site_profile_hash'] : '' ) ) { $state['pending_report']['site_profile'] = $profile; }
+				}
+				if ( ! empty( $state['refresh_ack_pending'] ) && ! empty( $state['refresh_result'] ) ) { $state['pending_report']['refresh_ack'] = $state['refresh_result']; }
+				if ( ! empty( $state['applied'] ) ) {
+					$conflict = agent_policy_conflict( $state );
+					$state['pending_report']['policy_ack'] = array( 'generation' => $state['applied']['generation'], 'hash' => $state['applied']['hash'], 'status' => $conflict ? 'rejected' : 'applied', 'reason_code' => $conflict ? 'local_policy_override' : null );
+				}
+				if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist check-in.' ); }
 			}
-			if ( ! empty( $state['update_activity'] ) ) { $state['pending_report']['automatic_update_activity'] = automatic_update_activity(); }
-			if ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) {
-				$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
+			$response = agent_http( 'agent/check-in', $state['pending_report'], $state );
+			if ( is_wp_error( $response ) ) {
+				$data = $response->get_error_data();
+				if ( ! $sequence_rebased && is_array( $data ) && 'sequence_conflict' === ( $data['remote_code'] ?? null ) && isset( $data['server_sequence'] ) && is_int( $data['server_sequence'] ) && $data['server_sequence'] >= (int) $state['sequence'] ) {
+					$from = (int) $state['sequence']; $state['sequence'] = $data['server_sequence']; unset( $state['pending_report'] );
+					if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not recover check-in sequence.' ); }
+					agent_log( 'check_in_sequence_rebased', array( 'from' => $from, 'to' => $state['sequence'] ) );
+					$sequence_rebased = true; continue;
+				}
+				if ( is_array( $data ) && 401 === ( $data['status'] ?? null ) ) {
+					$state['revoked'] = true; unset( $state['pending_report'] ); agent_store( $state );
+					wp_clear_scheduled_hook( 'sunrise_check_in', array( (int) $state['user_id'] ) );
+				}
+				return $response;
 			}
-			if ( ! empty( $state['site_profiles'] ) ) {
-				$profile = agent_site_profile();
-				if ( hash( 'sha256', wp_json_encode( $profile ) ) !== ( isset( $state['site_profile_hash'] ) ? $state['site_profile_hash'] : '' ) ) { $state['pending_report']['site_profile'] = $profile; }
-			}
-			if ( ! empty( $state['refresh_ack_pending'] ) && ! empty( $state['refresh_result'] ) ) { $state['pending_report']['refresh_ack'] = $state['refresh_result']; }
-			if ( ! empty( $state['applied'] ) ) {
-				$conflict = agent_policy_conflict( $state );
-				$state['pending_report']['policy_ack'] = array( 'generation' => $state['applied']['generation'], 'hash' => $state['applied']['hash'], 'status' => $conflict ? 'rejected' : 'applied', 'reason_code' => $conflict ? 'local_policy_override' : null );
-			}
-			if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist check-in.' ); }
-		}
-		$response = agent_http( 'agent/check-in', $state['pending_report'], $state );
-		if ( is_wp_error( $response ) ) {
-			$data = $response->get_error_data();
-			if ( is_array( $data ) && 401 === $data['status'] ) {
-				$state['revoked'] = true; unset( $state['pending_report'] ); agent_store( $state );
-				wp_clear_scheduled_hook( 'sunrise_check_in', array( (int) $state['user_id'] ) );
-			}
-			return $response;
+			break;
 		}
 		if ( ! isset( $response['receipt_sequence'] ) || $response['receipt_sequence'] !== $state['pending_report']['sequence'] ) { return new \WP_Error( 'sunrise_agent_receipt', 'Invalid check-in receipt.' ); }
 		$refresh = isset( $response['refresh_request'] ) ? $response['refresh_request'] : null;

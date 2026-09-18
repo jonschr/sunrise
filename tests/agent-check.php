@@ -79,6 +79,18 @@ try {
 	$result = Sunrise\agent_check_in();
 	sunrise_agent_assert( ! is_wp_error( $result ) && ! isset( $reports[1]['refresh_ack'] ) && Sunrise\agent_state()['refresh_result'] === $refresh_state['refresh_result'], 'Later reports omit the acknowledged result while retaining its execution deduplication ID' );
 	remove_filter( 'pre_http_request', $reply );
+	$sequence_state = Sunrise\agent_state(); unset( $sequence_state['pending_report'] ); Sunrise\agent_store( $sequence_state );
+	$server_sequence = $sequence_state['sequence'] + 5; $sequence_reports = array();
+	$sequence_reply = function ( $pre, $args, $url ) use ( &$sequence_reports, $server_sequence, $mock_wire ) {
+		if ( false === strpos( $url, '/v1/agent/check-in' ) ) { return $pre; }
+		$report = json_decode( $args['body'], true ); $sequence_reports[] = $report;
+		if ( 1 === count( $sequence_reports ) ) { return array( 'response' => array( 'code' => 409 ), 'headers' => array(), 'body' => wp_json_encode( array( 'error' => array( 'code' => 'sequence_conflict', 'server_sequence' => $server_sequence ) ) ) ); }
+		return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+	};
+	add_filter( 'pre_http_request', $sequence_reply, 10, 3 );
+	try { $result = Sunrise\agent_check_in(); } finally { remove_filter( 'pre_http_request', $sequence_reply ); }
+	$rebased = array_values( array_filter( get_option( 'sunrise_agent_log', array() ), function ( $entry ) { return 'check_in_sequence_rebased' === ( $entry['event'] ?? null ); } ) );
+	sunrise_agent_assert( ! is_wp_error( $result ) && 2 === count( $sequence_reports ) && $sequence_reports[0]['sequence'] === $sequence_state['sequence'] + 1 && $sequence_reports[1]['sequence'] === $server_sequence + 1 && Sunrise\agent_state()['sequence'] === $server_sequence + 1 && ! empty( $rebased ), 'A restored database rebases its stale check-in sequence and retries immediately' );
 	update_option( 'sunrise_agents', array( $original_user => $state ), false );
 	wp_unschedule_hook( 'sunrise_check_in' );
 	add_filter( 'pre_http_request', $block );

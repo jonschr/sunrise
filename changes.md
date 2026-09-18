@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.11 — 2026-09-18
+
+- Rebase a restored site's stale outbound report sequence from Control's authenticated receipt and retry the rebuilt report immediately.
+
 ## 0.3.10 — 2026-09-18
 
 - Replace the embedded Control dashboard with a local Site settings page showing connection status, last check-in, five-minute cadence, next cron run, immediate check-in, and re-authentication controls.
