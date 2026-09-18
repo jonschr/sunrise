@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.7 — 2026-09-18
+
+- Continue an already-started, Control-approved reconnection after migration cleanup removes the identity anchor or changes the administrator password hash.
+- Restore a missing installation anchor only after Control confirms the existing site's replacement credential.
+
 ## 0.3.6 — 2026-09-18
 
 - Exchange approved same-site reconnections directly during an ordinary WordPress request, without relying on WordPress cron or host shutdown processing.

@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.6/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.7/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site management, updates, and paired WordPress migrations.",
-    "changelog": "Exchange approved same-site reconnections during ordinary requests without WordPress cron or host shutdown callbacks."
+    "changelog": "Finish approved reconnections after migration cleanup changes local identity files or administrator passwords."
   }
 }

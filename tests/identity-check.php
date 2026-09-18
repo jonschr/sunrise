@@ -78,9 +78,10 @@ try {
 	add_filter( 'pre_http_request', $reconnect, 10, 3 );
 	$result = Sunrise\agent_reconnect( Sunrise\agent_state() );
 	sunrise_identity_assert( is_wp_error( $result ) && 'sunrise_reconnect_pending' === $result->get_error_code() && ! empty( Sunrise\agent_state()['reconnect']['enrollment_id'] ), 'Salt-only moves wait for Control reconnection approval' );
+	$pending = Sunrise\agent_state(); $pending['owner_fingerprint'] = str_repeat( '0', 64 ); Sunrise\agent_store( $pending ); unlink( $anchor_path );
 	$approved = true; $before_generation = Sunrise\agent_state()['generation'];
 	Sunrise\agent_maybe_schedule_reconnect();
-	sunrise_identity_assert( true === Sunrise\installation_guard() && Sunrise\agent_state()['generation'] === $before_generation + 1, 'An ordinary request exchanges Control approval without WordPress cron' );
+	sunrise_identity_assert( true === Sunrise\installation_guard() && Sunrise\installation_anchor() === $id && Sunrise\agent_state()['generation'] === $before_generation + 1, 'An ordinary request exchanges Control approval after migration cleanup without WordPress cron' );
 	remove_filter( 'pre_http_request', $reconnect ); add_filter( 'pre_http_request', $block ); $calls = 0;
 	$result = Sunrise\installation_resolve( 'same', $id, true );
 	sunrise_identity_assert( ! is_wp_error( $result ) && $id === $result['installation_id'] && true === Sunrise\installation_guard()

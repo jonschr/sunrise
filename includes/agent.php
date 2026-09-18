@@ -39,8 +39,7 @@ function agent_service_matches( $state ) {
 
 function agent_owner_valid( $state ) {
 	$user = get_user_by( 'id', $state['user_id'] );
-	$fingerprint = $user ? hash( 'sha256', $user->ID . "\n" . $user->user_login . "\n" . $user->user_pass ) : null;
-	return $user && ( empty( $state['owner_fingerprint'] ) || hash_equals( $state['owner_fingerprint'], $fingerprint ) ) && user_can( $user, 'manage_options' ) && user_can( $user, 'update_plugins' ) && user_can( $user, 'update_themes' ) && user_can( $user, 'update_core' );
+	return $user && user_can( $user, 'manage_options' ) && user_can( $user, 'update_plugins' ) && user_can( $user, 'update_themes' ) && user_can( $user, 'update_core' );
 }
 
 /** Non-autoloaded state; a WordPress installation normally has only a few connecting administrators. */
@@ -116,7 +115,7 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 /** Rotate an unreadable salt-bound credential only after Control approves the existing site record. */
 function agent_reconnect( $state ) {
 	require_once __DIR__ . '/controller.php';
-	if ( ! installation_salt_changed() || empty( $state['site_id'] ) || empty( $state['generation'] ) || empty( $state['account_id'] ) || empty( $state['network_id'] ) ) {
+	if ( ! agent_reconnectable( $state ) || empty( $state['site_id'] ) || empty( $state['generation'] ) || empty( $state['account_id'] ) || empty( $state['network_id'] ) ) {
 		return new \WP_Error( 'sunrise_identity_review', 'This installation changed. Review its identity in Sunrise before reconnecting.', array( 'status' => 409 ) );
 	}
 	if ( empty( $state['reconnect'] ) ) {
@@ -151,6 +150,7 @@ function agent_reconnect( $state ) {
 		return new \WP_Error( 'sunrise_reconnect_invalid', 'Sunrise Control returned an invalid reconnection.' );
 	}
 	$identity = installation_identity();
+	if ( ! installation_anchor() && ! installation_write_anchor( $identity['id'] ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not restore the installation identity.' ); }
 	$identity = array_merge( $identity, installation_markers( $identity['id'] ), array( 'review' => false, 'anchor_required' => true ) );
 	if ( ! update_option( 'sunrise_installation', $identity, false ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not confirm the installation identity.' ); }
 	$state['enrollment_id'] = $state['reconnect']['enrollment_id'];
@@ -158,6 +158,14 @@ function agent_reconnect( $state ) {
 	unset( $state['reconnect'] );
 	if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not finish the reconnection.' ); }
 	return true;
+}
+
+/** A started reconnection may finish after migration cleanup changes its original local markers. */
+function agent_reconnectable( $state ) {
+	if ( installation_salt_changed() ) { return true; }
+	if ( empty( $state['reconnect']['enrollment_id'] ) || empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
+	$identity = installation_identity(); $anchor = installation_anchor();
+	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
 }
 
 function agent_enroll( $intent = null ) {
@@ -178,7 +186,6 @@ function agent_enroll_locked( $intent = null ) {
 		require_once __DIR__ . '/controller.php';
 		$state = array( 'control_url' => agent_url(), 'url' => untrailingslashit( site_url() ), 'user_id' => get_current_user_id(), 'sequence' => 0 );
 		if ( ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator needs all update capabilities.' ); }
-		$user = wp_get_current_user(); $state['owner_fingerprint'] = hash( 'sha256', $user->ID . "\n" . $user->user_login . "\n" . $user->user_pass );
 		$secret = bin2hex( random_bytes( 32 ) );
 		$state['secret'] = credential( $secret, 'agent|' . $state['url'] . '|' . $state['user_id'] );
 		if ( is_wp_error( $state['secret'] ) ) { return $state['secret']; }
@@ -209,12 +216,12 @@ function agent_schedule( $delay, $user_id = null ) {
 /** Recover approved same-site moves immediately, even when the new host does not run WordPress cron. */
 function agent_maybe_schedule_reconnect() {
 	$states = agent_states();
-	if ( ! $states || ! installation_salt_changed() ) { return false; }
+	if ( ! $states ) { return false; }
 	$attempted = false; $previous = get_current_user_id();
 	try {
 		foreach ( $states as $user_id => $state ) {
 			$key = 'sunrise_reconnect_fallback_' . (int) $user_id;
-			if ( ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || get_transient( $key ) ) { continue; }
+			if ( ! agent_reconnectable( $state ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || get_transient( $key ) ) { continue; }
 			set_transient( $key, 1, AGENT_INTERVAL );
 			wp_set_current_user( (int) $user_id );
 			agent_check_in();
