@@ -212,6 +212,10 @@ function admin_page( $view = 'network' ) {
 	echo '<details class="sunrise-identity"' . ( is_wp_error( $identity_error ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Installation identity', 'sunrise' ) . '</summary><p><code>' . esc_html( $identity_id ) . '</code></p>';
 	if ( is_wp_error( $identity_error ) ) {
 		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Sunrise is paused because this installation changed. Is this a clone, or the existing site after a move or security-key change?', 'sunrise' ) . '</p></div>';
+		$recovery_error = get_option( 'sunrise_reconnect_errors', array() )[ get_current_user_id() ] ?? null;
+		if ( is_array( $recovery_error ) && isset( $recovery_error['code'], $recovery_error['at'] ) ) {
+			echo '<p>' . esc_html( sprintf( __( 'Last automatic recovery attempt: %1$s at %2$s.', 'sunrise' ), $recovery_error['code'], wp_date( 'Y-m-d H:i:s T', $recovery_error['at'] ) ) ) . '</p>';
+		}
 	}
 	if ( $database_replaced ) { echo '<p>' . esc_html__( 'The database belongs to a different installation. Reconnecting will retain this destination’s installation ID and replace the copied connection.', 'sunrise' ) . '</p>'; }
 	if ( ! $anchor_id ) { echo '<p>' . esc_html__( 'The installation identity file is missing or unreadable. Restore wp-content/sunrise-installation.php to retain the destination identity, or reconnect with a new identity. WordPress must be able to write that file.', 'sunrise' ) . '</p>'; }

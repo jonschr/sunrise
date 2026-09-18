@@ -145,7 +145,7 @@ function agent_reconnect( $state ) {
 		return $assignment;
 	}
 	if ( 'approved' !== ( $assignment['status'] ?? null ) ) { return new \WP_Error( 'sunrise_reconnect_pending', 'Approve this reconnection in Sunrise Control.', array( 'status' => 202 ) ); }
-	if ( $assignment['site_id'] !== $state['reconnect']['site_id'] || (int) $assignment['generation'] !== $state['reconnect']['generation'] + 1
+	if ( $assignment['site_id'] !== $state['reconnect']['site_id'] || (int) $assignment['generation'] <= $state['reconnect']['generation']
 		|| $assignment['account_id'] !== $state['account_id'] || $assignment['network_id'] !== $state['network_id'] ) {
 		return new \WP_Error( 'sunrise_reconnect_invalid', 'Sunrise Control returned an invalid reconnection.' );
 	}
@@ -164,8 +164,7 @@ function agent_reconnect( $state ) {
 function agent_reconnectable( $state ) {
 	if ( empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
 	$identity = installation_identity(); $anchor = installation_anchor();
-	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) )
-		&& ( ! empty( $state['reconnect'] ) || installation_salt_changed() );
+	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
 }
 
 function agent_enroll( $intent = null ) {
@@ -213,24 +212,31 @@ function agent_schedule( $delay, $user_id = null ) {
 	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) { wp_schedule_single_event( time() + max( 30, $delay ) + wp_rand( 0, 30 ), 'sunrise_check_in', $args ); }
 }
 
-/** Recover approved same-site moves immediately, even when the new host does not run WordPress cron. */
-function agent_maybe_schedule_reconnect() {
+/** Keep connected sites moving on ordinary traffic when the host disables traffic-triggered WP-Cron. */
+function agent_maybe_request_check_in() {
 	$states = agent_states();
 	if ( ! $states ) { return false; }
 	$attempted = false; $previous = get_current_user_id();
 	try {
 		foreach ( $states as $user_id => $state ) {
 			$key = 'sunrise_reconnect_fallback_' . (int) $user_id;
-			if ( ! agent_reconnectable( $state ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || get_transient( $key ) ) { continue; }
+			$recovery = is_wp_error( installation_guard() ) && agent_reconnectable( $state );
+			$overdue = ! empty( $state['site_id'] ) && ! is_wp_error( installation_guard() )
+				&& ( empty( $state['last_success'] ) || $state['last_success'] <= time() - AGENT_INTERVAL );
+			if ( ( ! $recovery && ! $overdue ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || get_transient( $key ) ) { continue; }
 			set_transient( $key, 1, AGENT_INTERVAL );
 			wp_set_current_user( (int) $user_id );
-			agent_check_in();
+			$result = agent_check_in();
+			$errors = get_option( 'sunrise_reconnect_errors', array() );
+			if ( $recovery && is_wp_error( $result ) ) { $errors[ $user_id ] = array( 'code' => $result->get_error_code(), 'at' => time() ); }
+			else { unset( $errors[ $user_id ] ); }
+			if ( $errors ) { update_option( 'sunrise_reconnect_errors', $errors, false ); } else { delete_option( 'sunrise_reconnect_errors' ); }
 			$attempted = true;
 		}
 	} finally { wp_set_current_user( $previous ); }
 	return $attempted;
 }
-add_action( 'init', __NAMESPACE__ . '\\agent_maybe_schedule_reconnect', 20 );
+add_action( 'init', __NAMESPACE__ . '\\agent_maybe_request_check_in', 20 );
 
 /** Apply a cadence change once on upgrade; retain earlier enrollment/job continuation events. */
 function agent_migrate_schedule() {

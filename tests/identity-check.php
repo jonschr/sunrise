@@ -41,13 +41,17 @@ try {
 	$post_id = wp_insert_post( array( 'post_title' => 'Sunrise destination identity fixture', 'post_content' => 'Content received from another installation.', 'post_status' => 'draft' ), true );
 	if ( is_wp_error( $post_id ) ) { throw new RuntimeException( 'Could not create content fixture' ); }
 	sunrise_identity_assert( true === Sunrise\installation_guard() && $identity === Sunrise\installation_identity() && $destination_connection === Sunrise\agent_state(), 'Content changes preserve the destination installation identity and its connections' );
+	$overdue = $destination_connection; $overdue['last_success'] = time() - Sunrise\AGENT_INTERVAL - 1; Sunrise\agent_store( $overdue ); delete_transient( 'sunrise_reconnect_fallback_' . get_current_user_id() );
+	sunrise_identity_assert( Sunrise\agent_maybe_request_check_in() && $calls > 0, 'Ordinary traffic attempts an overdue check-in when host cron is disabled' );
+	Sunrise\agent_store( $destination_connection ); delete_transient( 'sunrise_reconnect_fallback_' . get_current_user_id() ); $calls = 0;
 	add_filter( 'site_url', $url );
 	$agent = Sunrise\agent_state(); $agent['url'] = $url(); update_option( 'sunrise_agents', array( get_current_user_id() => $agent ), false );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'URL hash detects a clone even when a migrator rewrites the saved enrollment URL' );
-	sunrise_identity_assert( is_wp_error( Sunrise\agent_sync() ) && is_wp_error( Sunrise\agent_enroll() ) && 0 === $calls, 'Changed installation makes no agent request' );
+	sunrise_identity_assert( is_wp_error( Sunrise\agent_sync() ) && is_wp_error( Sunrise\agent_enroll() ) && 1 === $calls, 'Changed installation can only request a separately approved anonymous reconnection' );
 	sunrise_identity_assert( 'off' === Sunrise\item_policy( 'plugins', 'any/plugin.php' ) && ! Sunrise\filter_core( true, 'minor' ), 'Changed installation blocks managed automatic updates' );
 	sunrise_identity_assert( is_wp_error( Sunrise\enqueue_job( array( 'request_id' => wp_generate_uuid4(), 'action' => 'refresh' ) ) )
-		&& is_wp_error( Sunrise\controller_request( array(), 'inventory' ) ) && 0 === $calls, 'Queued work and peer requests share the identity guard' );
+		&& is_wp_error( Sunrise\controller_request( array(), 'inventory' ) ) && 1 === $calls, 'Queued work and peer requests share the identity guard' );
+	$calls = 0;
 	remove_filter( 'site_url', $url );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'Restoring the URL does not silently clear a detected mismatch' );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_resolve( 'clone', $id ) ) && is_wp_error( Sunrise\installation_resolve( 'clone', wp_generate_uuid4(), true ) ), 'Recovery requires confirmation and rejects stale identity forms' );
@@ -63,7 +67,7 @@ try {
 	$restore(); $identity = Sunrise\installation_identity(); $id = $identity['id'];
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );
-	sunrise_identity_assert( Sunrise\agent_maybe_schedule_reconnect() && $calls > 0, 'Salt rotation attempts throttled request-driven recovery when WordPress cron is disabled' );
+	sunrise_identity_assert( Sunrise\agent_maybe_request_check_in() && $calls > 0 && ! empty( get_option( 'sunrise_reconnect_errors' )[ get_current_user_id() ] ), 'Salt rotation records a throttled request-driven recovery failure when WordPress cron is disabled' );
 	foreach ( Sunrise\agent_states() as $user_id => $state ) { delete_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ); }
 	remove_filter( 'pre_http_request', $block ); $approved = false; $enrollment_id = wp_generate_uuid4();
 	$reconnect = function ( $pre, $args, $url ) use ( &$calls, &$approved, $enrollment_id ) {
@@ -73,15 +77,15 @@ try {
 			return array( 'response' => array( 'code' => 201 ), 'headers' => array(), 'body' => wp_json_encode( array( 'id' => $enrollment_id, 'approval_url' => Sunrise\agent_url() . '/?enrollment=' . $enrollment_id, 'phrase' => 'reconnect' ) ) );
 		}
 		$state = Sunrise\agent_state();
-		return array( 'response' => array( 'code' => $approved ? 200 : 202 ), 'headers' => array(), 'body' => wp_json_encode( $approved ? array( 'status' => 'approved', 'account_id' => $state['account_id'], 'network_id' => $state['network_id'], 'site_id' => $state['site_id'], 'generation' => $state['generation'] + 1 ) : array( 'status' => 'pending' ) ) );
+		return array( 'response' => array( 'code' => $approved ? 200 : 202 ), 'headers' => array(), 'body' => wp_json_encode( $approved ? array( 'status' => 'approved', 'account_id' => $state['account_id'], 'network_id' => $state['network_id'], 'site_id' => $state['site_id'], 'generation' => $state['generation'] + 2 ) : array( 'status' => 'pending' ) ) );
 	};
 	add_filter( 'pre_http_request', $reconnect, 10, 3 );
 	$result = Sunrise\agent_reconnect( Sunrise\agent_state() );
 	sunrise_identity_assert( is_wp_error( $result ) && 'sunrise_reconnect_pending' === $result->get_error_code() && ! empty( Sunrise\agent_state()['reconnect']['enrollment_id'] ), 'Salt-only moves wait for Control reconnection approval' );
 	$pending = Sunrise\agent_state(); $pending['owner_fingerprint'] = str_repeat( '0', 64 ); unset( $pending['reconnect']['enrollment_id'] ); Sunrise\agent_store( $pending ); unlink( $anchor_path );
 	$approved = true; $before_generation = Sunrise\agent_state()['generation'];
-	Sunrise\agent_maybe_schedule_reconnect();
-	sunrise_identity_assert( true === Sunrise\installation_guard() && Sunrise\installation_anchor() === $id && Sunrise\agent_state()['generation'] === $before_generation + 1, 'An ordinary request recovers a lost enrollment ID and exchanges Control approval without WordPress cron' );
+	Sunrise\agent_maybe_request_check_in();
+	sunrise_identity_assert( true === Sunrise\installation_guard() && Sunrise\installation_anchor() === $id && Sunrise\agent_state()['generation'] === $before_generation + 2, 'An ordinary request recovers a lost enrollment ID and accepts Control’s current generation without WordPress cron' );
 	remove_filter( 'pre_http_request', $reconnect ); add_filter( 'pre_http_request', $block ); $calls = 0;
 	$result = Sunrise\installation_resolve( 'same', $id, true );
 	sunrise_identity_assert( ! is_wp_error( $result ) && $id === $result['installation_id'] && true === Sunrise\installation_guard()

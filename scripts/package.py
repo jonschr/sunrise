@@ -31,6 +31,7 @@ with zipfile.ZipFile(io.BytesIO(archive)) as source:
     output = root / 'dist' / 'sunrise.zip'
     output.parent.mkdir(exist_ok=True)
     (output.parent / 'release-notes.md').write_text(section.group(1).strip() + '\n')
+    (output.parent / 'update.json').write_text(metadata)
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as target:
         for name in names:
             target.writestr('sunrise/' + name, source.read(name))

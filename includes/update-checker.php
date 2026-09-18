@@ -9,7 +9,7 @@ function plugin_update_checker() {
 	static $checker;
 	if ( ! $checker ) {
 		$checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-			'https://raw.githubusercontent.com/jonschr/sunrise/main/update.json', dirname( __DIR__ ) . '/sunrise.php', 'sunrise', 1
+			'https://github.com/jonschr/sunrise/releases/latest/download/update.json', dirname( __DIR__ ) . '/sunrise.php', 'sunrise', 1
 		);
 	}
 	return $checker;

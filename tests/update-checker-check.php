@@ -7,7 +7,7 @@ $calls = array(); $mode = 'release'; $offered = '999.0.0';
 $asset = 'https://github.com/jonschr/sunrise/releases/download/v' . $offered . '/sunrise.zip';
 $transport = function ( $pre, $options, $url ) use ( &$calls, &$mode, $asset, $offered ) {
  $calls[] = $url;
- if ( 'raw.githubusercontent.com' !== wp_parse_url( $url, PHP_URL_HOST ) || '/jonschr/sunrise/main/update.json' !== wp_parse_url( $url, PHP_URL_PATH ) ) { throw new RuntimeException( 'Unexpected metadata source' ); }
+ if ( 'github.com' !== wp_parse_url( $url, PHP_URL_HOST ) || '/jonschr/sunrise/releases/latest/download/update.json' !== wp_parse_url( $url, PHP_URL_PATH ) ) { throw new RuntimeException( 'Unexpected metadata source' ); }
  if ( isset( $options['headers']['Authorization'] ) ) { throw new RuntimeException( 'A public update must not send an authorization token' ); }
  if ( 'offline' === $mode ) { return new WP_Error( 'fixture_offline', 'Metadata unavailable' ); }
  $body = array( 'name' => 'invalid_name' === $mode ? 'Other' : 'Sunrise', 'version' => $offered, 'download_url' => 'invalid_package' === $mode ? 'https://example.invalid/plugin.zip' : $asset, 'icons' => array( 'svg' => 'https://raw.githubusercontent.com/jonschr/sunrise/main/assets/icon.svg' ) );

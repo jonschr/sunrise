@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.9 — 2026-09-18
+
+- Attempt overdue check-ins on ordinary WordPress traffic so disabled or delayed host cron cannot strand a connected site.
+- Let any same-URL identity review request a separately approved Control reconnection, then accept Control's current credential generation after a safe retry.
+- Record the last local recovery error and publish update metadata as an immutable GitHub release asset.
+
 ## 0.3.8 — 2026-09-18
 
 - Re-submit a started same-site reconnection idempotently when migration or concurrent update state lost its saved enrollment ID, then exchange the existing Control approval.
