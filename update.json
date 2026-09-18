@@ -1,15 +1,15 @@
 {
   "name": "Sunrise",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.9/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.10/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
     "svg": "https://raw.githubusercontent.com/jonschr/sunrise/main/assets/icon.svg"
   },
   "sections": {
-    "description": "Authenticated site management, updates, and paired WordPress migrations.",
-    "changelog": "Recover same-site moves through Control on ordinary traffic when cron is unavailable, and load update metadata from the immutable release asset."
+    "description": "Authenticated site update management and monitoring.",
+    "changelog": "Use local connection settings with direct check-in and re-authentication controls, plus a copyable privacy-safe diagnostic history."
   }
 }

@@ -98,42 +98,43 @@ function network_page() {
 }
 
 /** Central enrollment never falls back to stored peer credentials or network-wide site tokens. */
-function managed_network_page( $view ) {
+function managed_network_page() {
 	$state = agent_state();
-	if ( empty( $state['site_id'] ) && 'migrations' !== $view ) {
+	if ( empty( $state['site_id'] ) ) {
 		if ( ! empty( $state['approval_url'] ) && ! empty( $state['phrase'] ) ) {
 			echo '<p>' . esc_html__( 'Open the approval page and compare this verification phrase:', 'sunrise' ) . ' <strong>' . esc_html( $state['phrase'] ) . '</strong></p><p><a class="button button-primary" href="' . esc_url( $state['approval_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Approve connection in Sunrise Control', 'sunrise' ) . '</a></p>';
 			form_start( 'local', 'agent_sync' ); submit_button( __( 'Finish connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
 		}
 		form_start( 'local', 'agent_enroll' ); submit_button( __( 'Connect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>'; return;
 	}
-	if ( 'migrations' === $view ) {
-		echo '<div class="sunrise-migration-shell"><aside class="sunrise-migration-sidebar"><a class="sunrise-migration-brand" href="' . esc_url( add_query_arg( 'page', 'sunrise', admin_url( 'admin.php' ) ) ) . '"><span aria-hidden="true"></span>Sunrise</a><nav aria-label="Sunrise"><a href="' . esc_url( add_query_arg( 'page', 'sunrise', admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'Network', 'sunrise' ) . '</a><a href="' . esc_url( add_query_arg( 'page', 'sunrise-migrations', admin_url( 'admin.php' ) ) ) . '" aria-current="page">' . esc_html__( 'Migrations', 'sunrise' ) . '</a></nav><footer><strong>' . esc_html( get_bloginfo( 'name' ) ) . '</strong><small>' . esc_html( home_url( '/' ) ) . '</small></footer></aside><main class="sunrise-migration-content">';
-		require_once __DIR__ . '/migrations.php'; migration_workbench_page();
-		require_once __DIR__ . '/transfer-options.php'; transfer_recovery_page();
-		require_once __DIR__ . '/transfer-files.php'; transfer_file_recovery_page();
-		echo '</main></div>';
-		return;
-	}
-	require_once __DIR__ . '/dashboard.php'; dashboard_page();
-	echo '<details class="sunrise-connection"><summary>' . esc_html__( 'This site’s connection settings', 'sunrise' ) . '</summary>';
-
-	echo '<h2>' . esc_html__( 'This site’s connection', 'sunrise' ) . '</h2><table class="widefat striped"><tbody>';
+	echo '<div class="sunrise-settings"><section class="sunrise-settings-card"><h2>' . esc_html__( 'Connection', 'sunrise' ) . '</h2><p>' . esc_html__( 'This site reports its inventory and receives policy through outbound requests to Sunrise Control.', 'sunrise' ) . '</p><table><tbody>';
 	$next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
+	$last = ! empty( $state['last_success'] ) ? sprintf( __( '%1$s (%2$s ago)', 'sunrise' ), wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $state['last_success'] ), human_time_diff( $state['last_success'] ) ) : __( 'No check-in acknowledged yet', 'sunrise' );
+	$next_label = $next ? ( $next < time() ? sprintf( __( 'Overdue since %s', 'sunrise' ), wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next ) ) : wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next ) ) : __( 'Not scheduled', 'sunrise' );
+	$identity_error = is_wp_error( installation_guard() );
 	$values = array(
 		__( 'Owned by', 'sunrise' ) => wp_get_current_user()->display_name,
 		__( 'Site', 'sunrise' ) => home_url( '/' ),
-		__( 'Status', 'sunrise' ) => ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Your connection is paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ),
-		__( 'Last successful sync', 'sunrise' ) => ! empty( $state['last_success'] ) ? sprintf( __( '%s ago', 'sunrise' ), human_time_diff( $state['last_success'] ) ) : __( 'No report acknowledged yet', 'sunrise' ),
-		__( 'Next WordPress cron check-in', 'sunrise' ) => $next ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next ) : __( 'Not scheduled', 'sunrise' ),
+		__( 'Status', 'sunrise' ) => $identity_error ? ( ! empty( $state['reconnect']['enrollment_id'] ) ? __( 'Re-authentication waiting for Control approval', 'sunrise' ) : __( 'Re-authentication required', 'sunrise' ) ) : ( ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Your connection is paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ) ),
+		__( 'Last successful check-in', 'sunrise' ) => $last,
+		__( 'Expected cadence', 'sunrise' ) => __( 'Approximately every 5 minutes', 'sunrise' ),
+		__( 'Next WordPress cron check-in', 'sunrise' ) => $next_label,
 		__( 'Policy', 'sunrise' ) => empty( $state['applied'] ) ? __( 'Waiting for the first policy', 'sunrise' ) : ( agent_policy_conflict( $state ) ? __( 'Overridden by another local setting', 'sunrise' ) : __( 'Last received policy applied', 'sunrise' ) ),
 	);
 	foreach ( $values as $label => $value ) { echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>' . esc_html( $value ) . '</td></tr>'; }
-	echo '</tbody></table><p>' . esc_html__( 'Routine reports run approximately every five minutes. Sleeping local sites and idle WordPress cron can delay them. Sync now to send a report and collect pending work.', 'sunrise' ) . '</p>';
-	form_start( 'local', 'agent_sync' ); submit_button( __( 'Sync with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-	form_start( 'local', empty( $state['paused'] ) ? 'agent_pause' : 'agent_resume' ); submit_button( empty( $state['paused'] ) ? __( 'Pause automatic updates', 'sunrise' ) : __( 'Release my pause', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-	echo '<h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p>' . esc_html__( 'PHP fatal-error locations and sampled counts are enabled by default for connected sites. Up to 100 recent groups are retained for three days. Raw messages, stack traces, SQL, and request data are never collected. Reports are sent during sync; failures before Sunrise loads or hard process kills may not be captured.', 'sunrise' ) . '</p>';
-	form_start( 'local', ! error_reporting_enabled( $state ) ? 'errors_enable' : 'errors_disable' ); submit_button( ! error_reporting_enabled( $state ) ? __( 'Enable error summaries', 'sunrise' ) : __( 'Disable error summaries', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
-	echo '<details><summary>' . esc_html__( 'Disconnect this connection', 'sunrise' ) . '</summary>';
-	form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect my connection', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details></details>';
+	echo '</tbody></table><p>' . esc_html__( 'Check in now runs immediately in this request and does not depend on WordPress cron.', 'sunrise' ) . '</p>';
+	if ( ! empty( $state['reconnect']['approval_url'] ) ) {
+		echo '<p><strong>' . esc_html__( 'Re-authentication is waiting for approval.', 'sunrise' ) . '</strong> ' . ( ! empty( $state['reconnect']['phrase'] ) ? esc_html( sprintf( __( 'Verification phrase: %s', 'sunrise' ), $state['reconnect']['phrase'] ) ) : '' ) . '</p><p><a class="button button-primary" href="' . esc_url( $state['reconnect']['approval_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Approve in Sunrise Control', 'sunrise' ) . '</a></p>';
+	}
+	form_start( 'local', 'agent_sync' ); submit_button( __( 'Check in now', 'sunrise' ), 'primary', 'submit', false ); echo '</form>';
+	form_start( 'local', 'agent_reauthenticate' ); submit_button( __( 'Re-authenticate with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
+	echo '<p>' . esc_html__( 'Re-authentication replaces this plugin’s Control credential while retaining the existing site record, policies, and history.', 'sunrise' ) . '</p>';
+	if ( agent_dashboard_url() ) { echo '<p><a href="' . esc_url( agent_dashboard_url() ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control ↗', 'sunrise' ) . '</a></p>'; }
+	echo '</section><section class="sunrise-settings-card"><h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p><span class="sunrise-status' . ( error_reporting_enabled( $state ) ? '' : ' sunrise-status-disabled' ) . '">' . esc_html( error_reporting_enabled( $state ) ? __( 'Enabled by default', 'sunrise' ) : __( 'Disabled by local setting', 'sunrise' ) ) . '</span></p><p>' . esc_html__( 'Sunrise retains only fatal-error file locations and sampled counts for up to three days. It never collects raw messages, stack traces, SQL, or request data.', 'sunrise' ) . '</p></section>';
+	echo '<details class="sunrise-advanced"><summary>' . esc_html__( 'Advanced local controls', 'sunrise' ) . '</summary><section><h3>' . esc_html__( 'Emergency update pause', 'sunrise' ) . '</h3><p>' . esc_html__( 'Temporarily blocks Sunrise-managed automatic updates on this site. Control policies remain saved and resume when you release the pause.', 'sunrise' ) . '</p>';
+	form_start( 'local', empty( $state['paused'] ) ? 'agent_pause' : 'agent_resume' ); submit_button( empty( $state['paused'] ) ? __( 'Pause managed automatic updates', 'sunrise' ) : __( 'Resume managed automatic updates', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></section>';
+	echo '<section><h3>' . esc_html__( 'Error-summary collection', 'sunrise' ) . '</h3><p>' . esc_html__( 'Collection is enabled automatically for connected sites. Disable it here only when local policy requires that.', 'sunrise' ) . '</p>';
+	form_start( 'local', error_reporting_enabled( $state ) ? 'errors_disable' : 'errors_enable' ); submit_button( error_reporting_enabled( $state ) ? __( 'Disable error summaries', 'sunrise' ) : __( 'Enable error summaries', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></section>';
+	echo '<section><h3>' . esc_html__( 'Disconnect', 'sunrise' ) . '</h3><p>' . esc_html__( 'Stops check-ins and removes this administrator’s local Control credential.', 'sunrise' ) . '</p>';
+	form_start( 'local', 'agent_disconnect' ); submit_button( __( 'Disconnect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></section></details></div>';
 }

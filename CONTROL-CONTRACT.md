@@ -24,14 +24,12 @@ Network roles are expanded into these server-owned grants:
 
 Network administrators may manage viewer/maintainer memberships; only account owners assign/remove network administrators. Revoking account membership also invalidates every network grant in that account. Authorization uses current membership, not long-lived role claims in a login token. A person can hold different roles in different networks/accounts.
 
-Transfer permissions are additive, explicit grants, scoped to a site: `transfer.export`, `transfer.import_content`, `transfer.import_code`, and `transfer.import_tables`. No role automatically receives them. Only an account owner can issue/revoke them on the trusted origin with fresh authentication. These names reserve the future authorization boundary; no transfer execution endpoint ships in this milestone. A transfer needs export permission at its source and every relevant import permission at its destination, plus fresh approval bound to the exact manifest. Same-network membership by itself is never sufficient.
-
 | Site credential operation | Allowed scope |
 | --- | --- |
 | Publish inventory, local overrides, errors and check-in | Its own site only |
 | Fetch resolved policy, obtain job, send acknowledgment/result | Its own site only |
 | Revoke its enrollment | Its own site only |
-| List network inventory, edit desired policy, create jobs, invite members, approve transfer | Never |
+| List network inventory, edit desired policy, create jobs, invite members | Never |
 
 Local WordPress administrators retain ordinary local controls; their login does not authenticate a human to the central service. Human sessions stay on the Sunrise origin, using secure HttpOnly cookies and CSRF/origin checks for mutations. Opening Sunrise from wp-admin must not deliver those credentials to WordPress PHP, JavaScript, query strings, or postMessage handlers.
 
@@ -85,7 +83,7 @@ Use composite foreign keys including account/network scope on every tenant relat
 
 Use default-deny PostgreSQL RLS for tenant rows and a non-owner runtime role without BYPASSRLS. Derive transaction-local tenant/person/site context from authenticated server state, never raw body fields; reset automatically at transaction end for pooled connections. RLS must constrain the site principal to its site and human reads to permitted networks, not only to an account. Cross-scope errors return a generic not-found response without exposing constraint details. Migration and tightly bounded dispatch functions use separate privileges. No authorization result may be served from a stale query cache.
 
-Audit and detailed job retention initially target 90 days. Retain a compact idempotency tombstone for the lifetime of the site enrollment so an aged-out result cannot cause replay; a retry with purged details returns `410 result_expired`. The WordPress agent must persist processed central job IDs beyond its prototype's last-20-results limit. Detailed error groups, transfer records/baselines, and subscriptions are added when their feature is implemented; they follow the same tenant constraints.
+Audit and detailed job retention initially target 90 days. Retain a compact idempotency tombstone for the lifetime of the site enrollment so an aged-out result cannot cause replay; a retry with purged details returns `410 result_expired`. The WordPress agent must persist processed central job IDs beyond its prototype's last-20-results limit. Detailed error groups and subscriptions follow the same tenant constraints.
 
 ## 5. Policy document and precedence
 
@@ -153,7 +151,7 @@ All human routes require a central human session. Prefix below: `N = /v1/account
 | POST `/v1/agent/jobs/{j}/events` | Own job, execution token and event sequence; progress/result, never arbitrary state writes |
 | DELETE `/v1/agent/enrollment` | Self-disconnect |
 
-First-account creation is an explicit local bootstrap operation, not an open production registration endpoint. Account invitations, billing, diagnostics browsing, and transfer routes follow later; never mount placeholders that return success without enforcement.
+First-account creation is an explicit local bootstrap operation, not an open production registration endpoint. Account invitations, billing, and diagnostics browsing follow later; never mount placeholders that return success without enforcement.
 
 The refresh extension is implemented separately from the planned installation-job routes. Check-in may return `refresh_request:{id,expires_at}` with a 60-second execution window; the site reports `refresh_ack:{id,code}` with full inventory. Codes are `refresh_attempted`, `refresh_throttled`, or `refresh_interrupted`, never proof that provider data is fresh. Requests coalesce while queued, expire after 24 hours, and recheck the human actor before delivery. The agent persists the request before work, retains its ID to prevent repeat execution, and retries an unacknowledged report unchanged. After an accepted receipt, subsequent reports omit that acknowledgment. Upgrade the service before agents; do not roll back to a service that rejects this extension while agents have pending refresh acknowledgments.
 
@@ -207,9 +205,9 @@ Terminal states never return to queued. `failed` may include partial changes; it
 
 Event sequences and payload hashes make duplicate progress/results safe and prevent older results overwriting newer ones. Revoked agents cannot submit new events; unresolved jobs remain uncertain for inspection. Every authorization has an expiry; a delayed agent must reauthorize before starting, and resumable operations recheck at stage boundaries. Revocation after authorization still has an unavoidable in-flight window, documented rather than hidden.
 
-## 8. Verification and migration gates
+## 8. Verification gates
 
-Reference checks cover scope isolation, absence of implicit site/owner authority, transfer grant direction, policy precedence and unknown identities, invalid policy rejection, emergency pause, and terminal/uncertain job semantics. These are executable contract examples, not evidence that HTTP authentication, RLS, cryptography, or concurrency is implemented securely.
+Reference checks cover scope isolation, absence of implicit site/owner authority, policy precedence and unknown identities, invalid policy rejection, emergency pause, and terminal/uncertain job semantics. These are executable contract examples, not evidence that HTTP authentication, RLS, cryptography, or concurrency is implemented securely.
 
 Before claiming the next milestone complete, integration tests must exercise: two networks in one account plus another account; direct IDs and aggregate endpoints; revoked human/site credentials; fake enrollment and replay; pooled RLS contexts; enrollment approval races; policy-write/ack races; queue/database publication failures; duplicate claim/start/result delivery; late worker outcomes; site offline during policy changes; host overrides; local password change/deletion; and 1,000 synthetic inventories with bounded queries.
 
@@ -222,19 +220,6 @@ References: [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecu
 
 The first central executor accepts exact-version installation only and limits each connection to one outstanding job. Human inventory/history reads are paged. Creation snapshots the reported installed version and identity; start rechecks the original human and enrollment. Claim/start/result and conditional cancellation/reconciliation are implemented with PostgreSQL transactions, RLS and audit records. No separate queue service is required for this outbound-only path.
 
-A local durable execution fence and process-held file lock protect multiple connections to the same WordPress installation. Interrupted workers report uncertainty with stopped-worker evidence; a human may then close the operation unverified. Timed WordPress locks alone cannot establish stopped-worker evidence. Native automatic updates and other Sunrise installation jobs remain paused while the fence is present. Identity recovery takes the same process lock; generic transfers must exclude this installation-local lock and Sunrise state. Manual WordPress/host updates are outside Sunrise's locks.
+A local durable execution fence and process-held file lock protect multiple connections to the same WordPress installation. Interrupted workers report uncertainty with stopped-worker evidence; a human may then close the operation unverified. Timed WordPress locks alone cannot establish stopped-worker evidence. Native automatic updates and other Sunrise installation jobs remain paused while the fence is present. Identity recovery takes the same process lock. Manual WordPress/host updates are outside Sunrise's locks.
 
 The implementation returns agent job responses as `{job}`, and result events use `{execution_token,sequence,status,code,worker_stopped:true}`. Only final/uncertain outcomes are supported; progress heartbeats, automatic success/failure reconciliation, bulk runs and retention are deferred. The trusted Control dashboard exposes exact-version installation, cancellation and inspected stopped-worker reconciliation; the primary network dashboard also exposes aggregate reports, conditional policy forms and sequential selected-site job submission. Each selected job retains its own authorization, exact version and idempotency key; unsent work stops when the user closes the view or changes network. Embedding network controls in WordPress remains separate work. Actual end-to-end central installation is verified with a synthetic plugin; core/theme replacement and provider-host certification remain outstanding.
-
-
-## Central transfer preparation and endpoint approval
-
-Network administrators can now prepare native-setting transfers from Control. `POST N/transfers` takes `{source_site_id,destination_site_id,names}` and a UUID `Idempotency-Key`; `GET N/transfers` pages 50 records with its UUID `after` cursor, and `GET N/transfers/{id}` reads one request. The selection is immutable, both connections must be in this account/network, and equal installation URLs are rejected. At most five pending previews per endpoint may exist. Preparation expires after 72 hours. This first settings scope uses explicit per-operation administrator approval; it does not turn update permissions or site enrollment into standing content/code/table transfer grants.
-
-The agent negotiates `transfer_previews` and only makes extra requests when check-in reports `transfer_work_available` or an exact report remains unacknowledged. `POST /v1/agent/transfers/claim` returns one assigned source-snapshot or destination-preview task. Results go to `/v1/agent/transfers/{id}/source|destination`. Source capture runs first; destination preparation receives only that selected source snapshot. Each side may report only for its own connection/generation. PHP persists its exact report before HTTP and reuses it after transport failure, even if local content changed. Native settings/identity remain unchanged. Unsupported preparation reports a bounded failure code instead of retrying arbitrary work. A normal idle sync adds no transfer HTTP request.
-
-Control renders the exact destination before/after values using text nodes. `POST N/transfers/{id}/approve` takes `{side,revision,plan_hash}`. Source and destination approvals are separate human actions, bound to the same immutable canonical plan hash and a shared 15-minute expiry. They may come from the same administrator, but neither can come from a WordPress site credential. `POST N/transfers/{id}/cancel` takes `{revision}`. Stale edits fail with 412; changed hashes or expired previews cannot be approved. Site generation changes/disconnection and requester/approver access removal cancel the request; reactivation does not revive it. These approvals do not currently produce a write lease: **execution_available remains false** until scoped validation, backup/recovery, precondition checks and a durable executor are implemented.
-
-Migration 013 adds tenant/site RLS, immutable endpoint/selection columns, database guards preventing agents from approving or retargeting requests, and revocation triggers. API projections return only an agent's own assigned task; database row access is limited to an explicitly requested pair. Thirty-day cleanup removes at most 500 expired preview records per hourly run. A future executor must preserve active/uncertain execution records when extending this cleanup. No file/object storage or new cloud permissions are required for these small settings snapshots.
-
-Checks: `npm test` includes scoped preparation/approval, duplicate delivery, foreign-site denial, direct SQL mutation guards, expiry, revocation, queue limits and failed preparation. `tests/agent-transfer-check.php` checks shared locking, persistent exact retries, cancellation and older-service negotiation. `node --experimental-strip-types tests/cove-transfer-work-check.mjs` exercises human HTTP request → both actual outbound Cove agents → exact approvals and verifies unchanged settings/identity. `node --experimental-strip-types browser-transfers-check.ts` exercises the complete review UI, escaping, stale approvals, cancellation and viewer isolation. All temporary sessions/request fixtures are removed; transport sequences are never rewound.

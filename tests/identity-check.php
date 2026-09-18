@@ -68,6 +68,8 @@ try {
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );
 	sunrise_identity_assert( Sunrise\agent_maybe_request_check_in() && $calls > 0 && ! empty( get_option( 'sunrise_reconnect_errors' )[ get_current_user_id() ] ), 'Salt rotation records a throttled request-driven recovery failure when WordPress cron is disabled' );
+	$diagnostics = wp_json_encode( Sunrise\agent_diagnostic_log() );
+	sunrise_identity_assert( false !== strpos( $diagnostics, 'traffic_check_in_failed' ) && false !== strpos( $diagnostics, 'request_transport_failed' ) && false === strpos( $diagnostics, $destination_connection['secret'] ), 'Diagnostic log records recovery failures without exposing the stored credential' );
 	foreach ( Sunrise\agent_states() as $user_id => $state ) { delete_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ); }
 	remove_filter( 'pre_http_request', $block ); $approved = false; $enrollment_id = wp_generate_uuid4();
 	$reconnect = function ( $pre, $args, $url ) use ( &$calls, &$approved, $enrollment_id ) {

@@ -5,8 +5,7 @@ defined( 'ABSPATH' ) || exit;
 
 add_action( 'admin_menu', function () {
 	add_menu_page( 'Sunrise', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page', 'none', 1000000 );
-	add_submenu_page( 'sunrise', 'Sunrise Network', __( 'Network', 'sunrise' ), 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
-	add_submenu_page( 'sunrise', 'Sunrise Migrations', __( 'Migrations', 'sunrise' ), 'manage_options', 'sunrise-migrations', __NAMESPACE__ . '\\migrations_page' );
+	add_submenu_page( 'sunrise', 'Sunrise Site Settings', __( 'Site settings', 'sunrise' ), 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
 } );
 
 add_action( 'admin_enqueue_scripts', function ( $hook ) {
@@ -16,15 +15,12 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 		wp_enqueue_script( 'sunrise-connect', plugins_url( '../assets/connect.js', __FILE__ ), array(), VERSION, true );
 		wp_localize_script( 'sunrise-connect', 'sunriseConnect', array( 'enroll' => rest_url( 'sunrise/v1/agent/connect' ), 'sync' => rest_url( 'sunrise/v1/agent/check-in' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) );
 	}
-	if ( in_array( $hook, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) {
-		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
+	if ( 'toplevel_page_sunrise' === $hook ) {
+		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-settings{max-width:820px}.sunrise-settings form{display:inline-block;margin:0 8px 12px 0}.sunrise-settings table{margin:12px 0 18px}.sunrise-diagnostics textarea{width:100%;font:12px/1.5 monospace}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		foreach ( array( 'admin_notices', 'all_admin_notices', 'network_admin_notices' ) as $notice_hook ) { remove_all_actions( $notice_hook ); }
-		add_filter( 'admin_body_class', function ( $classes ) { return $classes . ' sunrise-app-page'; } );
-		wp_enqueue_style( 'sunrise-dashboard', plugins_url( '../assets/dashboard.css', __FILE__ ), array(), VERSION );
 		wp_enqueue_script( 'sunrise-shell', plugins_url( '../assets/shell.js', __FILE__ ), array(), VERSION, true );
 		admin_load();
-		if ( 'sunrise_page_sunrise-migrations' === $hook ) { wp_enqueue_style( 'sunrise-migrations', plugins_url( '../assets/migrations.css', __FILE__ ), array(), VERSION ); }
-		if ( 'toplevel_page_sunrise' === $hook && agent_url() ) { wp_enqueue_style( 'sunrise-dashboard', plugins_url( '../assets/dashboard.css', __FILE__ ), array(), VERSION ); }
+		if ( 'toplevel_page_sunrise' === $hook ) { wp_enqueue_style( 'sunrise-settings', plugins_url( '../assets/settings.css', __FILE__ ), array(), VERSION ); }
 		if ( agent_url() ) { return; }
 		wp_enqueue_script( 'sunrise-network', plugins_url( '../assets/network.js', __FILE__ ), array(), VERSION, true );
 		wp_localize_script( 'sunrise-network', 'sunriseNetwork', array( 'url' => rest_url( 'sunrise/v1/controller/refresh/' ), 'nonce' => wp_create_nonce( 'wp_rest' ), 'sites' => array_keys( connections() ), 'refreshing' => __( 'Refreshing site', 'sunrise' ), 'finished' => __( 'Finished. Reloading inventory…', 'sunrise' ) ) );
@@ -44,11 +40,16 @@ function agent_connection_needed() {
 
 function connection_form() {
 	form_start( 'local', 'agent_enroll' );
-	echo '<button type="submit" class="button button-primary">' . esc_html__( 'Connect this site', 'sunrise' ) . '</button> <span class="sunrise-connect-status" role="status" aria-live="polite"></span></form>';
+	echo '<button type="submit" class="button button-primary">' . esc_html__( 'Authenticate with Sunrise Control', 'sunrise' ) . '</button> <span class="sunrise-connect-status" role="status" aria-live="polite"></span></form>';
+}
+
+function diagnostic_log_section() {
+	$diagnostics = wp_json_encode( agent_diagnostic_log(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+	echo '<details class="sunrise-diagnostics"><summary>' . esc_html__( 'Diagnostic log', 'sunrise' ) . '</summary><p>' . esc_html__( 'Includes site and Control identifiers and URLs needed for support. It excludes credentials, salts, cookies, authorization headers, request bodies, and personal user data.', 'sunrise' ) . '</p><p><button type="button" class="button" data-sunrise-copy-log>' . esc_html__( 'Copy diagnostic log', 'sunrise' ) . '</button> <span role="status" aria-live="polite"></span></p><textarea readonly rows="16" id="sunrise-diagnostic-log">' . esc_textarea( $diagnostics ) . '</textarea></details>';
 }
 
 add_action( 'admin_notices', function () {
-	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || in_array( get_current_screen()->id, array( 'toplevel_page_sunrise', 'sunrise_page_sunrise-migrations' ), true ) ) { return; }
+	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || 'toplevel_page_sunrise' === get_current_screen()->id ) { return; }
 	echo '<div class="notice notice-info"><p><strong>' . esc_html__( 'Connect this site to Sunrise', 'sunrise' ) . '</strong></p><p>' . esc_html__( 'Send this site’s update status to your Sunrise network and manage its updates there.', 'sunrise' ) . '</p>';
 	connection_form(); echo '<p></p></div>';
 } );
@@ -100,19 +101,12 @@ add_action( 'admin_post_sunrise', function () {
 	if ( 'identity_resolve' === $action ) {
 		$result = installation_resolve( isset( $input['identity_kind'] ) ? $input['identity_kind'] : '', isset( $input['installation_id'] ) ? $input['installation_id'] : '', isset( $input['confirm_identity'] ) && '1' === $input['confirm_identity'] );
 		if ( ! is_wp_error( $result ) && agent_url() ) { $result = agent_enroll(); }
-	} elseif ( 'transfer_files_restore' === $action ) {
-		require_once __DIR__ . '/transfer-files.php'; require_once __DIR__ . '/agent-jobs.php';
-		$lock = agent_execution_lock(); if ( is_wp_error( $lock ) ) { $result = $lock; } else {
-			try { $result = transfer_files_restore( $input['transfer_id'] ?? null, $input['plan_hash'] ?? null, $lock ); }
-			finally { flock( $lock, LOCK_UN ); fclose( $lock ); }
-		}
-	} elseif ( 'transfer_restore' === $action ) {
-		require_once __DIR__ . '/transfer-options.php';
-		$result = transfer_options_commit( isset( $input['transfer_id'] ) ? $input['transfer_id'] : null, null, isset( $input['plan_hash'] ) ? $input['plan_hash'] : null, true );
 	} elseif ( 'errors_enable' === $action || 'errors_disable' === $action ) {
 		$result = error_capture_setting( 'errors_enable' === $action );
 	} elseif ( 'agent_enroll' === $action ) {
 		$result = agent_enroll();
+	} elseif ( 'agent_reauthenticate' === $action ) {
+		$result = agent_reauthenticate();
 	} elseif ( 'agent_disconnect' === $action ) {
 		$result = agent_disconnect();
 	} elseif ( 'agent_pause' === $action || 'agent_resume' === $action ) {
@@ -145,13 +139,14 @@ add_action( 'admin_post_sunrise', function () {
 	} elseif ( in_array( $action, array( 'run', 'acknowledge' ), true ) && isset( $input['job_id'] ) && is_string( $input['job_id'] ) && wp_is_uuid( $input['job_id'], 4 ) ) {
 		$result = admin_request( $site, 'jobs/' . strtolower( $input['job_id'] ) . '/' . $action, 'POST' );
 	}
+	$expected_pending = is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'sunrise_reconnect_pending', 'sunrise_approval_pending' ), true );
 	$notice = is_wp_error( $result ) ? $result->get_error_message() : __( 'Request completed.', 'sunrise' );
 	if ( 'job' === $action && ! is_wp_error( $result ) && isset( $result['id'] ) ) {
 		update_option( 'sunrise_last_job_' . get_current_user_id() . '_' . $site, $result['id'], false );
 		$notice = __( 'Job accepted. WordPress cron will run it, or use Run queued job below.', 'sunrise' );
 	}
-	set_transient( 'sunrise_notice_' . get_current_user_id(), array( 'error' => is_wp_error( $result ), 'message' => $notice ), 60 );
-	wp_safe_redirect( add_query_arg( array( 'page' => in_array( $action, array( 'transfer_restore', 'transfer_files_restore' ), true ) ? 'sunrise-migrations' : 'sunrise', 'site' => $site ), admin_url( 'admin.php' ) ) );
+	set_transient( 'sunrise_notice_' . get_current_user_id(), array( 'error' => is_wp_error( $result ) && ! $expected_pending, 'message' => $notice ), 60 );
+	wp_safe_redirect( add_query_arg( array( 'page' => 'sunrise', 'site' => $site ), admin_url( 'admin.php' ) ) );
 	exit;
 } );
 
@@ -180,59 +175,58 @@ function job_button( $site, $label, $task ) {
 	echo '</form>';
 }
 
-function migrations_page() { admin_page( 'migrations' ); }
-
-function admin_page( $view = 'network' ) {
+function admin_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 	admin_load();
 	$site = isset( $_GET['site'] ) && is_string( $_GET['site'] ) ? sanitize_key( wp_unslash( $_GET['site'] ) ) : 'overview';
-	echo '<div class="wrap sunrise-wrap"><h1>' . esc_html( 'migrations' === $view ? __( 'Sunrise Migrations', 'sunrise' ) : __( 'Sunrise Network', 'sunrise' ) ) . '</h1>';
+	echo '<div class="wrap sunrise-wrap"><h1>' . esc_html__( 'Sunrise Site Settings', 'sunrise' ) . '</h1>';
 	$notice = get_transient( 'sunrise_notice_' . get_current_user_id() );
 	if ( $notice ) {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
-	$migration_connected = 'migrations' === $view && ( (bool) get_option( 'sunrise_migration_pairs' ) || (bool) array_filter( agent_states(), function ( $state ) { return ! empty( $state['site_id'] ) && agent_owner_valid( $state ) && agent_service_matches( $state ); } ) );
-	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! $migration_connected && ! is_wp_error( installation_guard() ) ) {
+	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! is_wp_error( installation_guard() ) ) {
 		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Until connected, Sunrise sends no inventory or error reports.', 'sunrise' ) . '</p>';
 		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
-		connection_form(); echo '</section></div>';
+		connection_form(); echo '</section>';
+		if ( agent_state() ) { diagnostic_log_section(); }
+		echo '</div>';
 		return;
 	}
-	echo '<div class="sunrise-site-tools">';
-	if ( agent_dashboard_url() ) { echo '<a href="' . esc_url( add_query_arg( 'view', 'administration', agent_dashboard_url() ) ) . '">' . esc_html__( 'Administration ↗', 'sunrise' ) . '</a>'; }
-	echo '<button type="button" class="button" data-sunrise-dialog="sunrise-site-settings">' . esc_html__( 'Site settings', 'sunrise' ) . '</button></div><dialog id="sunrise-site-settings"><form method="dialog"><button class="button">' . esc_html__( 'Close', 'sunrise' ) . '</button></form><h2>' . esc_html__( 'Site settings', 'sunrise' ) . '</h2></dialog>';
-	$identity = installation_identity();
 	$identity_error = installation_guard();
-	$anchor_id = installation_anchor();
-	$identity_id = $anchor_id ? $anchor_id : ( is_array( $identity ) && isset( $identity['id'] ) && is_string( $identity['id'] ) ? $identity['id'] : '' );
-	$database_replaced = $anchor_id && is_array( $identity ) && isset( $identity['id'] ) && $anchor_id !== $identity['id'];
-	echo '<details class="sunrise-identity"' . ( is_wp_error( $identity_error ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Installation identity', 'sunrise' ) . '</summary><p><code>' . esc_html( $identity_id ) . '</code></p>';
 	if ( is_wp_error( $identity_error ) ) {
-		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Sunrise is paused because this installation changed. Is this a clone, or the existing site after a move or security-key change?', 'sunrise' ) . '</p></div>';
+		$identity = installation_identity(); $anchor_id = installation_anchor();
+		$identity_id = $anchor_id ? $anchor_id : ( is_array( $identity ) && isset( $identity['id'] ) && is_string( $identity['id'] ) ? $identity['id'] : '' );
+		$database_replaced = $anchor_id && is_array( $identity ) && isset( $identity['id'] ) && $anchor_id !== $identity['id'];
+		$normal_reauthentication = agent_state() && agent_reconnectable( agent_state() );
+		echo '<section class="sunrise-recovery"><h2>' . esc_html__( 'Connection recovery needed', 'sunrise' ) . '</h2>';
+		if ( $normal_reauthentication ) { echo '<p>' . esc_html__( 'This appears to be the same site after a move or security-key change. Use Re-authenticate with Sunrise Control below. That replaces only the connection credential and retains this site record, policies, and history.', 'sunrise' ) . '</p>'; }
+		else { echo '<p>' . esc_html__( 'The saved installation identity does not match this WordPress installation. Use the advanced recovery below only after a clone or database replacement.', 'sunrise' ) . '</p>'; }
 		$recovery_error = get_option( 'sunrise_reconnect_errors', array() )[ get_current_user_id() ] ?? null;
 		if ( is_array( $recovery_error ) && isset( $recovery_error['code'], $recovery_error['at'] ) ) {
 			echo '<p>' . esc_html( sprintf( __( 'Last automatic recovery attempt: %1$s at %2$s.', 'sunrise' ), $recovery_error['code'], wp_date( 'Y-m-d H:i:s T', $recovery_error['at'] ) ) ) . '</p>';
 		}
+		if ( ! $normal_reauthentication ) {
+			echo '<details><summary>' . esc_html__( 'Advanced clone or database recovery', 'sunrise' ) . '</summary>';
+			if ( $database_replaced ) { echo '<p>' . esc_html__( 'The database belongs to a different installation. Recovery retains this destination’s installation ID and removes the copied local connection.', 'sunrise' ) . '</p>'; }
+			if ( ! $anchor_id ) { echo '<p>' . esc_html__( 'The installation identity file is missing or unreadable. WordPress must be able to write wp-content/sunrise-installation.php.', 'sunrise' ) . '</p>'; }
+			echo '<p>' . esc_html__( 'This clears local Sunrise connections, policies, snapshots, and jobs. It does not disconnect the original site in Control.', 'sunrise' ) . '</p>';
+			form_start( 'local', 'identity_resolve' ); echo '<input type="hidden" name="installation_id" value="' . esc_attr( $identity_id ) . '">';
+			if ( $database_replaced ) { echo '<input type="hidden" name="identity_kind" value="same">'; }
+			else { echo '<p><label for="sunrise-identity-kind">' . esc_html__( 'Recovery type', 'sunrise' ) . '</label> <select id="sunrise-identity-kind" name="identity_kind"><option value="clone">' . esc_html__( 'Cloned site — create a separate identity', 'sunrise' ) . '</option><option value="same"' . ( ! $anchor_id ? ' disabled' : '' ) . '>' . esc_html__( 'Replaced database — retain this destination identity', 'sunrise' ) . '</option></select></p>'; }
+			echo '<p><label><input type="checkbox" name="confirm_identity" value="1" required> ' . esc_html__( 'Clear this installation’s local Sunrise state.', 'sunrise' ) . '</label></p>';
+			submit_button( __( 'Reset local Sunrise identity', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
+		}
+		echo '</section>';
 	}
-	if ( $database_replaced ) { echo '<p>' . esc_html__( 'The database belongs to a different installation. Reconnecting will retain this destination’s installation ID and replace the copied connection.', 'sunrise' ) . '</p>'; }
-	if ( ! $anchor_id ) { echo '<p>' . esc_html__( 'The installation identity file is missing or unreadable. Restore wp-content/sunrise-installation.php to retain the destination identity, or reconnect with a new identity. WordPress must be able to write that file.', 'sunrise' ) . '</p>'; }
-	echo '<p>' . esc_html__( 'Only use recovery after cloning, moving, or changing security keys. Recovery removes saved Sunrise connections, policies, snapshots, and jobs from this installation. Reconnect afterward. It does not disconnect the original site remotely.', 'sunrise' ) . '</p>';
-	form_start( 'local', 'identity_resolve' );
-	echo '<input type="hidden" name="installation_id" value="' . esc_attr( $identity_id ) . '">';
-	if ( $database_replaced ) { echo '<input type="hidden" name="identity_kind" value="same">'; }
-	else { echo '<p><label for="sunrise-identity-kind">' . esc_html__( 'This installation is', 'sunrise' ) . '</label> <select id="sunrise-identity-kind" name="identity_kind"><option value="clone">' . esc_html__( 'A clone — generate a new identity', 'sunrise' ) . '</option><option value="same"' . ( ! $anchor_id ? ' disabled' : '' ) . '>' . esc_html__( 'The existing site — keep its identity', 'sunrise' ) . '</option></select></p>'; }
-	echo '<p><label><input type="checkbox" name="confirm_identity" value="1" required> ' . esc_html__( 'Clear local Sunrise connections and settings, then reconnect.', 'sunrise' ) . '</label></p>';
-	submit_button( __( 'Reconnect this site', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
-	if ( is_wp_error( $identity_error ) ) { echo '</div>'; return; }
 	if ( agent_url() ) {
 		require_once __DIR__ . '/network.php';
-		managed_network_page( $view );
+		managed_network_page();
+		diagnostic_log_section();
 		echo '</div>'; return;
 	}
-	if ( 'migrations' === $view ) { echo '<p>' . esc_html__( 'Connect this site to Sunrise Control to prepare transfers.', 'sunrise' ) . '</p></div>'; return; }
 	echo '<form method="get" action="' . esc_url( admin_url( 'admin.php' ) ) . '"><input type="hidden" name="page" value="sunrise"><label for="sunrise-site">' . esc_html__( 'View', 'sunrise' ) . ' </label><select id="sunrise-site" name="site"><option value="overview" ' . selected( $site, 'overview', false ) . '>' . esc_html__( 'Network overview', 'sunrise' ) . '</option><option value="local" ' . selected( $site, 'local', false ) . '>' . esc_html__( 'This site', 'sunrise' ) . '</option>';
 	foreach ( connections() as $id => $connection ) {
 		echo '<option value="' . esc_attr( $id ) . '" ' . selected( $site, $id, false ) . '>' . esc_html( $connection['url'] ) . '</option>';

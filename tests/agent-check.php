@@ -44,9 +44,7 @@ try {
 	$dashboard_url = Sunrise\agent_dashboard_url();
 	sunrise_agent_assert( $dashboard_url && false !== strpos( $dashboard_url, 'network=' ) && false === strpos( $dashboard_url, $state['secret'] ) && false === strpos( $dashboard_url, $state['digest'] ), 'Dashboard link contains only a navigation hint, not site credentials' );
 	ob_start(); Sunrise\admin_page(); $managed_html = ob_get_clean();
-	sunrise_agent_assert( false !== strpos( $managed_html, 'id="sunrise-dashboard"' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed Network page does not fall through to the legacy peer interface' );
-	ob_start(); Sunrise\migrations_page(); $migration_html = ob_get_clean();
-	sunrise_agent_assert( false !== strpos( $migration_html, 'Sunrise Migrations' ) && false === strpos( $migration_html, 'Application password' ), 'Migrations has its own administrator page with the same connection boundary' );
+	sunrise_agent_assert( false === strpos( $managed_html, 'id="sunrise-dashboard"' ) && false !== strpos( $managed_html, 'Sunrise Site Settings' ) && false !== strpos( $managed_html, 'Check in now' ) && false !== strpos( $managed_html, 'Re-authenticate with Sunrise Control' ) && false !== strpos( $managed_html, 'Expected cadence' ) && false !== strpos( $managed_html, 'Copy diagnostic log' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed site page exposes only local connection settings and diagnostics' );
 
 	$profile_state = Sunrise\agent_state(); unset( $profile_state['wake_requests'], $profile_state['wake_registered'], $profile_state['site_profiles'], $profile_state['site_profile_hash'], $profile_state['update_failures'], $profile_state['update_failure_hash'] ); Sunrise\agent_store( $profile_state );
 	wp_unschedule_hook( 'sunrise_check_in' );

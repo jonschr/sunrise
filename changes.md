@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.10 — 2026-09-18
+
+- Replace the embedded Control dashboard with a local Site settings page showing connection status, last check-in, five-minute cadence, next cron run, immediate check-in, and re-authentication controls.
+- Retain a bounded, copyable 14-day diagnostic history of cron, transport, identity, and reconnection state without credentials, salts, authorization headers, request bodies, or personal user data.
+- Remove the unfinished migration workbench, transfer endpoints, and background transfer protocol. Existing private recovery files are left untouched during upgrade.
+
 ## 0.3.9 — 2026-09-18
 
 - Attempt overdue check-ins on ordinary WordPress traffic so disabled or delayed host cron cannot strand a connected site.
