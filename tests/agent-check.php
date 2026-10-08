@@ -54,7 +54,7 @@ try {
 	sunrise_agent_assert( 0 === get_current_user_id() && 2 === count( $reports ), 'Background cron sync works without a logged-in user and restores that context' );
 	wp_set_current_user( $original_user );
 	$next = wp_next_scheduled( 'sunrise_check_in', array( $original_user ) );
-	sunrise_agent_assert( $next >= $now + 5 * MINUTE_IN_SECONDS && $next <= time() + 5 * MINUTE_IN_SECONDS + 30, 'Cron schedules the next outbound report in five minutes with jitter' );
+	sunrise_agent_assert( $next >= $now + 6 * HOUR_IN_SECONDS && $next <= time() + 6 * HOUR_IN_SECONDS + 30, 'Cron schedules the next outbound report in six hours with jitter' );
 	sunrise_agent_assert( 2 === count( $reports ) && $mock_wire['generation'] === $reports[1]['policy_ack']['generation'], 'A new policy is acknowledged immediately in the same sync' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'] ) && Sunrise\agent_site_profile() === $reports[1]['site_profile'], 'Profiles are negotiated first and delivered in the bounded follow-up' );
 	sunrise_agent_assert( ! isset( $reports[0]['wake_key'] ) && Sunrise\agent_wake_key( $state ) === $reports[1]['wake_key'], 'Wake-only authentication is negotiated and registered' );
@@ -96,12 +96,12 @@ try {
 	wp_unschedule_hook( 'sunrise_check_in' );
 	add_filter( 'pre_http_request', $block );
 	$now = time(); do_action( 'sunrise_check_in', $original_user );
-	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 5 * MINUTE_IN_SECONDS, 'An unreachable site retains the five-minute retry interval' );
+	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 6 * HOUR_IN_SECONDS, 'An unreachable site retains the six-hour retry interval' );
 	remove_filter( 'pre_http_request', $block );
-	$throttled = function () { return array( 'response' => array( 'code' => 429 ), 'headers' => array( 'retry-after' => 3600 ), 'body' => '{"error":{"code":"rate_limited"}}' ); };
+	$throttled = function () { return array( 'response' => array( 'code' => 429 ), 'headers' => array( 'retry-after' => 12 * HOUR_IN_SECONDS ), 'body' => '{"error":{"code":"rate_limited"}}' ); };
 	wp_unschedule_hook( 'sunrise_check_in' );add_filter( 'pre_http_request', $throttled );$now = time();
 	try { do_action( 'sunrise_check_in', $original_user ); } finally { remove_filter( 'pre_http_request', $throttled ); }
-	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 3600, 'A longer Retry-After remains authoritative' );
+	sunrise_agent_assert( wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) >= $now + 12 * HOUR_IN_SECONDS, 'A longer Retry-After remains authoritative' );
 
 	update_option( 'sunrise_agents', array( $original_user => $state ), false );
 	$before = Sunrise\policy();

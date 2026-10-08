@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.13 — 2026-10-08
+
+- Reduce routine Control check-ins and default outage retries from five minutes to six hours, with up to thirty seconds of jitter.
+- Preserve already queued early checks, immediate manual checks, signed wakes, and urgent enrollment/job follow-ups.
+- Keep longer server Retry-After delays authoritative.
+
 ## 0.3.12 — 2026-09-18
 
 - Learn Control's current Sunrise release during every check-in and force a fresh verified release lookup before an exact Sunrise installation.

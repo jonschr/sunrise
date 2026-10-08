@@ -3,7 +3,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const AGENT_INTERVAL = 5 * MINUTE_IN_SECONDS;
+const AGENT_INTERVAL = 6 * HOUR_IN_SECONDS;
 
 /** The staging origin is the default; a trusted wp-config.php override supports local development. */
 function agent_control_origin( $value, $local ) {
@@ -322,7 +322,7 @@ function agent_maybe_request_check_in() {
 			wp_set_current_user( (int) $user_id );
 			if ( $identity_error && ! $recovery ) { agent_log( 'recovery_blocked', agent_installation_diagnostics() ); continue; }
 			if ( ( ! $recovery && ! $overdue ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { continue; }
-			if ( get_transient( $key ) ) { agent_log( 'traffic_check_in_deferred', array( 'mode' => $recovery ? 'recovery' : 'overdue', 'reason' => 'five_minute_throttle' ) ); continue; }
+			if ( get_transient( $key ) ) { agent_log( 'traffic_check_in_deferred', array( 'mode' => $recovery ? 'recovery' : 'overdue', 'reason' => 'check_in_interval_throttle' ) ); continue; }
 			set_transient( $key, time(), AGENT_INTERVAL );
 			agent_log( 'traffic_check_in_started', array( 'mode' => $recovery ? 'recovery' : 'overdue' ) );
 			$result = agent_check_in();
