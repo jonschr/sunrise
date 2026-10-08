@@ -8,12 +8,15 @@ try {
  sunrise_schedule_assert( isset( $states[ $owner ] ), 'Enrolled owner fixture exists' );
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 5 * MINUTE_IN_SECONDS, 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', 300 );$previous = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );
  Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );
- sunrise_schedule_assert( $next === $previous, 'Upgrade preserves the pending five-minute event; its successor uses six hours' );
+ sunrise_schedule_assert( $next === $previous, 'Upgrade preserves the pending five-minute event; its successor uses one hour' );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 6 * HOUR_IN_SECONDS, 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', 6 * HOUR_IN_SECONDS );
+ Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );
+ sunrise_schedule_assert( $next >= time() + HOUR_IN_SECONDS - 2 && $next <= time() + HOUR_IN_SECONDS + 30, 'Existing six-hour schedule moves to one hour plus jitter' );
  sunrise_schedule_assert( $states === Sunrise\agent_states(), 'Connection identities and credentials remain unchanged' );
  Sunrise\agent_migrate_schedule();sunrise_schedule_assert( $next === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Repeated requests do not postpone check-in' );
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );wp_schedule_single_event( time() + 60, 'sunrise_check_in', array( $owner ) );$soon = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );delete_option( 'sunrise_agent_interval' );Sunrise\agent_migrate_schedule();
  sunrise_schedule_assert( $soon === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Earlier queued-work events are preserved' );
- wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', Sunrise\AGENT_INTERVAL );Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );sunrise_schedule_assert( $next >= time() + 6 * HOUR_IN_SECONDS - 2 && $next <= time() + 6 * HOUR_IN_SECONDS + 30, 'Routine init restores a missing owner event at six hours plus jitter' );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', Sunrise\AGENT_INTERVAL );Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );sunrise_schedule_assert( $next >= time() + HOUR_IN_SECONDS - 2 && $next <= time() + HOUR_IN_SECONDS + 30, 'Routine init restores a missing owner event at one hour plus jitter' );
 } finally {
  remove_filter( 'pre_http_request', $block );update_option( 'cron', $cron );
  if ( null === $interval ) { delete_option( 'sunrise_agent_interval' ); } else { update_option( 'sunrise_agent_interval', $interval, true ); }

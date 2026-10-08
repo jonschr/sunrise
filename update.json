@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.13/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.14/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Reduce routine check-ins to six hours while preserving manual checks and urgent follow-ups."
+    "changelog": "Check in hourly and bring existing six-hour schedules forward on upgrade."
   }
 }

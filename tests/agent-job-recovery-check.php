@@ -46,7 +46,7 @@ try {
  update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'], 'result' => array( 'status' => 'succeeded', 'code' => 'updated' ) ), false );
  wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); Sunrise\agent_schedule( 5 * MINUTE_IN_SECONDS );
  $synced = Sunrise\agent_synchronize(); $next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
- sunrise_recovery_assert( ! is_wp_error( $synced ) && $next >= time() + 30 && $next <= time() + 95 && empty( Sunrise\agent_state()['remote_job'] ), 'Finishing a queued job schedules remaining explicit work soon, replacing the routine six-hour event' );
+ sunrise_recovery_assert( ! is_wp_error( $synced ) && $next >= time() + 30 && $next <= time() + 95 && empty( Sunrise\agent_state()['remote_job'] ), 'Finishing a queued job schedules remaining explicit work soon, replacing the routine hourly event' );
 } finally {
  update_option( 'cron', $cron );
  remove_filter( 'pre_http_request', $transport ); Sunrise\agent_store_states( $states );

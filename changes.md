@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.14 — 2026-10-08
+
+- Change routine Control check-ins and default outage retries from six hours to one hour, with up to thirty seconds of jitter.
+- Bring existing six-hour schedules forward on upgrade while preserving earlier enrollment/job events and manual checks.
+
 ## 0.3.13 — 2026-10-08
 
 - Reduce routine Control check-ins and default outage retries from five minutes to six hours, with up to thirty seconds of jitter.
