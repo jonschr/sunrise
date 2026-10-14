@@ -7,6 +7,7 @@ delete_site_option( 'external_updates-sunrise' );
 if ( is_multisite() ) {
 	return;
 }
+delete_option( 'sunrise_control_environment' );
 
 foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) {
 	wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) );

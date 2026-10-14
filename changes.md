@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.15 — 2026-10-14
+
+- Default to production at https://desk.sunrisecontrol.app.
+- Add a hidden administrator setting at `wp-admin/admin.php?page=sunrise&sunrise_environment=1` to select production or staging at https://staging.sunrisecontrol.app without editing code.
+- Require fresh enrollment when the Control address changes; retain previous remote records and prevent old credentials or policies from crossing environments.
+- Block environment changes while connection or remote update work is pending. Preserve trusted wp-config.php overrides for development.
+
 ## 0.3.14 — 2026-10-08
 
 - Change routine Control check-ins and default outage retries from six hours to one hour, with up to thirty seconds of jitter.

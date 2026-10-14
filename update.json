@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.14/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.15/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Check in hourly and bring existing six-hour schedules forward on upgrade."
+    "changelog": "Use production by default, with a hidden per-site staging switch and fresh enrollment when the Control address changes."
   }
 }

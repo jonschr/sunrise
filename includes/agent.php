@@ -5,7 +5,7 @@ defined( 'ABSPATH' ) || exit;
 
 const AGENT_INTERVAL = HOUR_IN_SECONDS;
 
-/** The staging origin is the default; a trusted wp-config.php override supports local development. */
+/** Only a trusted wp-config.php override may provide an arbitrary Control origin. */
 function agent_control_origin( $value, $local ) {
 	if ( ! is_string( $value ) ) { return false; }
 	if ( $local && 'http://127.0.0.1:8787' === $value ) { return $value; }
@@ -18,7 +18,27 @@ function agent_control_origin( $value, $local ) {
 }
 
 function agent_url() {
-	return agent_control_origin( defined( 'SUNRISE_CONTROL_URL' ) ? SUNRISE_CONTROL_URL : 'https://sunrise-staging.elod.in', 'local' === wp_get_environment_type() );
+	$origin = 'staging' === get_option( 'sunrise_control_environment', 'production' ) ? 'https://staging.sunrisecontrol.app' : 'https://desk.sunrisecontrol.app';
+	return agent_control_origin( defined( 'SUNRISE_CONTROL_URL' ) ? SUNRISE_CONTROL_URL : $origin, 'local' === wp_get_environment_type() );
+}
+
+/** Site-wide selection; credentials stay bound to their original environment until explicitly re-enrolled. */
+function agent_set_environment( $environment ) {
+	if ( ! current_user_can( 'manage_options' ) || ! current_user_can( 'update_plugins' ) || ! current_user_can( 'update_themes' ) || ! current_user_can( 'update_core' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'Administrator access and all update capabilities are required.' ); }
+	if ( defined( 'SUNRISE_CONTROL_URL' ) ) { return new \WP_Error( 'sunrise_agent_override', 'The Control address is overridden in wp-config.php.' ); }
+	if ( ! in_array( $environment, array( 'production', 'staging' ), true ) ) { return new \WP_Error( 'sunrise_agent_environment', 'Select production or staging.' ); }
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	try {
+		if ( $environment === get_option( 'sunrise_control_environment', 'production' ) ) { return true; }
+		if ( get_option( 'sunrise_remote_job_fence' ) ) { return new \WP_Error( 'sunrise_job_pending', 'Reconcile the pending update before switching environments.' ); }
+		foreach ( agent_states() as $state ) {
+			if ( ! empty( $state['remote_job'] ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile every pending update before switching environments.' ); }
+		}
+		if ( ! update_option( 'sunrise_control_environment', $environment, false ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not save the Control environment.' ); }
+		agent_log( 'environment_changed', array( 'environment' => $environment ) );
+		return true;
+	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
 /** Navigation hints only; the Control origin separately authenticates and authorizes the human. */
@@ -139,6 +159,7 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 /** Rotate a credential only after Control approves the existing site record. */
 function agent_reconnect( $state ) {
 	require_once __DIR__ . '/controller.php';
+	if ( ! agent_service_matches( $state ) ) { return new \WP_Error( 'sunrise_agent_environment', 'The Control address changed. Connect this site to the selected environment.' ); }
 	if ( ! agent_reconnectable( $state ) || empty( $state['site_id'] ) || empty( $state['generation'] ) || empty( $state['account_id'] ) || empty( $state['network_id'] ) ) {
 		agent_log( 'recovery_blocked', array_merge( array( 'reason' => 'connection_or_identity_mismatch' ), agent_installation_diagnostics() ) );
 		return new \WP_Error( 'sunrise_identity_review', 'This installation changed. Review its identity in Sunrise before reconnecting.', array( 'status' => 409 ) );
@@ -211,7 +232,7 @@ function agent_enroll_locked( $intent = null ) {
 	$access = agent_access( true ); if ( is_wp_error( $access ) ) { return $access; }
 	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 	$state = agent_state();
-	if ( ! empty( $state['revoked'] ) ) {
+	if ( $state && ( ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) ) {
 		$cleared = agent_disconnect_locked(); if ( is_wp_error( $cleared ) ) { return $cleared; } $state = array();
 	}
 	if ( ! $state ) {
@@ -655,8 +676,9 @@ function agent_disconnect() {
 function agent_disconnect_locked() {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	$state = agent_state();
-	if ( ! empty( $state['remote_job'] ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending update before reconnecting or clearing this connection.' ); }
-	if ( $state && ! empty( $state['site_id'] ) && empty( $state['revoked'] ) ) {
+	if ( ! empty( $state['remote_job'] ) || get_option( 'sunrise_remote_job_fence' ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending update before reconnecting or clearing this connection.' ); }
+	// A changed environment must never receive the old credential or revoke the old remote record.
+	if ( $state && agent_service_matches( $state ) && ! empty( $state['site_id'] ) && empty( $state['revoked'] ) ) {
 		$result = agent_http( 'agent/enrollment', array(), $state, 'DELETE' );
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();

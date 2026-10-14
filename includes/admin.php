@@ -35,7 +35,7 @@ function admin_load() {
 
 function agent_connection_needed() {
 	$state = agent_state();
-	return current_user_can( 'manage_options' ) && current_user_can( 'update_plugins' ) && current_user_can( 'update_themes' ) && current_user_can( 'update_core' ) && agent_url() && ( ! $state || empty( $state['site_id'] ) || ! empty( $state['revoked'] ) ) && ! is_wp_error( installation_guard() );
+	return current_user_can( 'manage_options' ) && current_user_can( 'update_plugins' ) && current_user_can( 'update_themes' ) && current_user_can( 'update_core' ) && agent_url() && ( ! $state || empty( $state['site_id'] ) || ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) && ! is_wp_error( installation_guard() );
 }
 
 function connection_form() {
@@ -90,7 +90,7 @@ add_action( 'admin_post_sunrise', function () {
 		wp_die( esc_html__( 'Administrator access is required.', 'sunrise' ), '', array( 'response' => 403 ) );
 	}
 	check_admin_referer( 'sunrise' );
-	$access = agent_access( isset( $_POST['operation'] ) && 'agent_enroll' === $_POST['operation'] );
+	$access = agent_access( isset( $_POST['operation'] ) && in_array( $_POST['operation'], array( 'agent_enroll', 'agent_environment' ), true ) );
 	$recovery = isset( $_POST['operation'] ) && 'identity_resolve' === $_POST['operation'] && is_wp_error( installation_guard() );
 	if ( is_wp_error( $access ) && ! $recovery ) { wp_die( esc_html( $access->get_error_message() ), '', array( 'response' => 403 ) ); }
 	admin_load();
@@ -105,6 +105,8 @@ add_action( 'admin_post_sunrise', function () {
 		$result = error_capture_setting( 'errors_enable' === $action );
 	} elseif ( 'agent_enroll' === $action ) {
 		$result = agent_enroll();
+	} elseif ( 'agent_environment' === $action ) {
+		$result = agent_set_environment( $input['environment'] ?? null );
 	} elseif ( 'agent_reauthenticate' === $action ) {
 		$result = agent_reauthenticate();
 	} elseif ( 'agent_disconnect' === $action ) {
@@ -141,12 +143,15 @@ add_action( 'admin_post_sunrise', function () {
 	}
 	$expected_pending = is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'sunrise_reconnect_pending', 'sunrise_approval_pending' ), true );
 	$notice = is_wp_error( $result ) ? $result->get_error_message() : __( 'Request completed.', 'sunrise' );
+	if ( 'agent_environment' === $action && ! is_wp_error( $result ) ) { $notice = __( 'Control environment saved. Connect this administrator to the selected environment if prompted.', 'sunrise' ); }
 	if ( 'job' === $action && ! is_wp_error( $result ) && isset( $result['id'] ) ) {
 		update_option( 'sunrise_last_job_' . get_current_user_id() . '_' . $site, $result['id'], false );
 		$notice = __( 'Job accepted. WordPress cron will run it, or use Run queued job below.', 'sunrise' );
 	}
 	set_transient( 'sunrise_notice_' . get_current_user_id(), array( 'error' => is_wp_error( $result ) && ! $expected_pending, 'message' => $notice ), 60 );
-	wp_safe_redirect( add_query_arg( array( 'page' => 'sunrise', 'site' => $site ), admin_url( 'admin.php' ) ) );
+	$redirect = array( 'page' => 'sunrise', 'site' => $site );
+	if ( 'agent_environment' === $action ) { $redirect['sunrise_environment'] = '1'; }
+	wp_safe_redirect( add_query_arg( $redirect, admin_url( 'admin.php' ) ) );
 	exit;
 } );
 
@@ -154,6 +159,22 @@ function form_start( $site, $operation ) {
 	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 	wp_nonce_field( 'sunrise' );
 	echo '<input type="hidden" name="action" value="sunrise"><input type="hidden" name="site" value="' . esc_attr( $site ) . '"><input type="hidden" name="operation" value="' . esc_attr( $operation ) . '">';
+}
+
+/** Hidden support setting: admin.php?page=sunrise&sunrise_environment=1. */
+function agent_environment_form() {
+	if ( ! current_user_can( 'manage_options' ) || ! isset( $_GET['sunrise_environment'] ) || '1' !== $_GET['sunrise_environment'] ) { return; }
+	echo '<section><h2>' . esc_html__( 'Control environment', 'sunrise' ) . '</h2><p>' . esc_html__( 'Applies to every Sunrise connection on this WordPress site. Changing environments pauses its managed updates and reports until each administrator reconnects. Site records and history in the previous environment are retained.', 'sunrise' ) . '</p>';
+	if ( defined( 'SUNRISE_CONTROL_URL' ) ) {
+		echo '<p>' . esc_html__( 'The Control address is overridden in wp-config.php; this setting is unavailable.', 'sunrise' ) . '</p></section>';
+		return;
+	}
+	form_start( 'local', 'agent_environment' );
+	echo '<label for="sunrise-control-environment">' . esc_html__( 'Environment', 'sunrise' ) . '</label> <select id="sunrise-control-environment" name="environment">';
+	foreach ( array( 'production' => 'Production', 'staging' => 'Staging' ) as $value => $label ) {
+		echo '<option value="' . esc_attr( $value ) . '" ' . selected( get_option( 'sunrise_control_environment', 'production' ), $value, false ) . '>' . esc_html( $label ) . '</option>';
+	}
+	echo '</select> '; submit_button( __( 'Save environment', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></section>';
 }
 
 function policy_select( $name, $value, $core = false ) {
@@ -187,9 +208,11 @@ function admin_page() {
 		echo '<div class="notice ' . ( $notice['error'] ? 'notice-error' : 'notice-success' ) . '"><p>' . esc_html( $notice['message'] ) . '</p></div>';
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
-	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) ) && ! is_wp_error( installation_guard() ) ) {
+	agent_environment_form();
+	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) || ! agent_service_matches( agent_state() ) ) && ! is_wp_error( installation_guard() ) ) {
 		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Until connected, Sunrise sends no inventory or error reports.', 'sunrise' ) . '</p>';
 		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
+		if ( agent_state() && ! agent_service_matches( agent_state() ) ) { echo '<p>' . esc_html__( 'The Control address changed. Authenticate again to connect to the selected environment. Your previous site record and history remain in the previous environment.', 'sunrise' ) . '</p>'; }
 		connection_form(); echo '</section>';
 		if ( agent_state() ) { diagnostic_log_section(); }
 		echo '</div>';
