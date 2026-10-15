@@ -2,6 +2,10 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.20 — 2026-10-15
+
+- Move Sunrise from the top-level WordPress sidebar into Settings > Sunrise. Retain administrator access requirements, update screen-specific assets and notice handling, and point page links, forms, and redirects at the Settings page. Remove the unused top-level menu icon styling.
+
 ## 0.3.19 — 2026-10-15
 
 - Capture bounded, sanitized fatal-error messages and up to twelve code-only stack frames when PHP provides them. Never retain trace arguments or objects; redact common credentials, emails, URLs, queries, and absolute paths from messages. Custom application text may still appear.
