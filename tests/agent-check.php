@@ -17,9 +17,10 @@ $mock_document = $state['applied']['document'];
 $mock_document['generation']++;
 $mock_wire = array( 'generation' => $mock_document['generation'], 'document_json' => wp_json_encode( $mock_document ) );
 $mock_wire['hash'] = hash( 'sha256', $mock_wire['document_json'] );
-$reply = function ( $pre, $args ) use ( &$reports, $mock_wire ) {
+$reply = function ( $pre, $args, $url ) use ( &$reports, $mock_wire ) {
+	if ( '/agent/check-in' !== substr( $url, -15 ) ) { return new WP_Error( 'fixture_offline', 'Non-Control requests blocked' ); }
 	$report = json_decode( $args['body'], true ); $reports[] = $report;
-	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'sunrise_latest_version' => Sunrise\VERSION, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'sunrise_latest_version' => Sunrise\VERSION, 'site_profiles' => true, 'php_versions' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 };
 try {
 	$loaded_wp_version = $GLOBALS['wp_version'];
@@ -46,9 +47,9 @@ try {
 	ob_start(); Sunrise\admin_page(); $managed_html = ob_get_clean();
 	sunrise_agent_assert( false === strpos( $managed_html, 'id="sunrise-dashboard"' ) && false !== strpos( $managed_html, 'Sunrise Site Settings' ) && false !== strpos( $managed_html, 'Check in now' ) && false !== strpos( $managed_html, 'Re-authenticate with Sunrise Control' ) && false !== strpos( $managed_html, 'Expected cadence' ) && false !== strpos( $managed_html, 'Copy diagnostic log' ) && false === strpos( $managed_html, 'Application password' ) && false === strpos( $managed_html, 'sunrise-refresh-network' ), 'Managed site page exposes only local connection settings and diagnostics' );
 
-	$profile_state = Sunrise\agent_state(); unset( $profile_state['wake_requests'], $profile_state['wake_registered'], $profile_state['site_profiles'], $profile_state['site_profile_hash'], $profile_state['update_failures'], $profile_state['update_failure_hash'] ); Sunrise\agent_store( $profile_state );
+	$profile_state = Sunrise\agent_state(); unset( $profile_state['php_versions'], $profile_state['reported_php_version'], $profile_state['wake_requests'], $profile_state['wake_registered'], $profile_state['site_profiles'], $profile_state['site_profile_hash'], $profile_state['update_failures'], $profile_state['update_failure_hash'] ); Sunrise\agent_store( $profile_state );
 	wp_unschedule_hook( 'sunrise_check_in' );
-	add_filter( 'pre_http_request', $reply, 10, 2 );
+	add_filter( 'pre_http_request', $reply, 10, 3 );
 	wp_set_current_user( 0 );
 	$now = time(); do_action( 'sunrise_check_in', $original_user );
 	sunrise_agent_assert( 0 === get_current_user_id() && 2 === count( $reports ), 'Background cron sync works without a logged-in user and restores that context' );
@@ -56,6 +57,7 @@ try {
 	$next = wp_next_scheduled( 'sunrise_check_in', array( $original_user ) );
 	sunrise_agent_assert( $next >= $now + HOUR_IN_SECONDS && $next <= time() + HOUR_IN_SECONDS + 30, 'Cron schedules the next outbound report in one hour with jitter' );
 	sunrise_agent_assert( 2 === count( $reports ) && $mock_wire['generation'] === $reports[1]['policy_ack']['generation'], 'A new policy is acknowledged immediately in the same sync' );
+	sunrise_agent_assert( ! isset( $reports[0]['php_version'] ) && PHP_VERSION === $reports[1]['php_version'], 'PHP version is negotiated before reporting and includes the actual runtime version' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'] ) && Sunrise\agent_site_profile() === $reports[1]['site_profile'], 'Profiles are negotiated first and delivered in the bounded follow-up' );
 	sunrise_agent_assert( ! isset( $reports[0]['wake_key'] ) && Sunrise\agent_wake_key( $state ) === $reports[1]['wake_key'], 'Wake-only authentication is negotiated and registered' );
 	sunrise_agent_assert( ! isset( $reports[0]['automatic_update_failures'] ) && isset( $reports[1]['automatic_update_failures'] ), 'Automatic failures are negotiated before the snapshot is sent' );
@@ -74,7 +76,7 @@ try {
 	$pending = Sunrise\agent_state()['pending_report'];
 	sunrise_agent_assert( is_wp_error( $result ) && Sunrise\agent_state()['refresh_ack_pending'] && $pending['refresh_ack'] === $refresh_state['refresh_result'], 'Lost refresh acknowledgment remains pending with its exact report' );
 	remove_filter( 'pre_http_request', $block );
-	add_filter( 'pre_http_request', $reply, 10, 2 );
+	add_filter( 'pre_http_request', $reply, 10, 3 );
 	$reports = array(); $result = Sunrise\agent_check_in();
 	sunrise_agent_assert( ! is_wp_error( $result ) && $reports[0] === $pending && ! Sunrise\agent_state()['refresh_ack_pending'], 'Accepted retry clears refresh acknowledgment only after the exact report succeeds' );
 	$result = Sunrise\agent_check_in();
@@ -86,7 +88,7 @@ try {
 		if ( false === strpos( $url, '/v1/agent/check-in' ) ) { return $pre; }
 		$report = json_decode( $args['body'], true ); $sequence_reports[] = $report;
 		if ( 1 === count( $sequence_reports ) ) { return array( 'response' => array( 'code' => 409 ), 'headers' => array(), 'body' => wp_json_encode( array( 'error' => array( 'code' => 'sequence_conflict', 'server_sequence' => $server_sequence ) ) ) ); }
-		return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+		return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'php_versions' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 	};
 	add_filter( 'pre_http_request', $sequence_reply, 10, 3 );
 	try { $result = Sunrise\agent_check_in(); } finally { remove_filter( 'pre_http_request', $sequence_reply ); }

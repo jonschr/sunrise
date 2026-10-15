@@ -25,7 +25,13 @@ function agent_job_clear( &$state ) {
 function agent_job_failure_code( $error ) {
 	$code = preg_replace( '/[^a-z_]/', '', substr( $error->get_error_code(), 0, 80 ) );
 	$reason = automatic_failure_reason( $error );
-	return 'unknown' === $reason ? ( $code ?: 'update_failed' ) : $reason;
+	return 0 === strpos( $code, 'sunrise_' ) || 'unknown' === $reason ? ( $code ?: 'update_failed' ) : $reason;
+}
+function agent_job_exception_code( $error ) {
+	if ( $error instanceof \ArgumentCountError ) { return 'php_argument_error'; }
+	if ( $error instanceof \TypeError ) { return 'php_type_error'; }
+	if ( $error instanceof \ParseError ) { return 'php_parse_error'; }
+	return $error instanceof \Error ? 'php_runtime_error' : 'execution_exception';
 }
 function agent_job_response( $response, $id = null ) {
 	if ( is_wp_error( $response ) ) { return $response; }
@@ -140,7 +146,7 @@ function agent_run_update_job() {
 			$record['status'] = is_wp_error( $result ) ? 'failed' : 'succeeded';
 			$record['code'] = is_wp_error( $result ) ? agent_job_failure_code( $result ) : $result['code'];
 			if ( ! $record['code'] ) { $record['code'] = 'update_failed'; }
-		} catch ( \Throwable $error ) { $record['status'] = 'uncertain'; $record['code'] = 'execution_interrupted'; }
+		} catch ( \Throwable $error ) { $record['status'] = 'uncertain'; $record['code'] = agent_job_exception_code( $error ); }
 		$fence['result'] = array( 'status' => $record['status'], 'code' => $record['code'] );
 		if ( ! update_option( 'sunrise_remote_job_fence', $fence, false ) ) { return job_error( 'storage_failed', 'Could not persist the installation outcome; inspect the site.' ); }
 		if ( ! ( $agent_locked = \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) ) { return job_error( 'busy', 'The installation result is retained; another report is running.' ); }

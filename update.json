@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.22/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.23/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Recover deleted or stuck Control connections with a fresh approval code, renew expired requests, and keep installation identity stable across background and translated requests."
+    "changelog": "Report site PHP versions and distinguish update compatibility, package/provider, transport, filesystem, disk-space, rollback and PHP runtime failures."
   }
 }

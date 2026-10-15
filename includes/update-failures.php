@@ -4,10 +4,27 @@ defined( 'ABSPATH' ) || exit;
 
 function automatic_failure_reason( $error ) {
 	if ( ! is_wp_error( $error ) ) { return 'unknown'; }
-	$code = $error->get_error_code();
+	$code = preg_replace( '/^sunrise_/', '', strtolower( $error->get_error_code() ) );
 	// Classify locally; never transmit messages, package URLs, API keys, or error data.
 	$message = strtolower( implode( ' ', $error->get_error_messages() ) );
-	if ( preg_match( '/licen[sc]e|api[ _-]?key|subscription|unauthori[sz]ed|forbidden|401|403/', $message ) ) { return 'license_required'; }
+	if ( preg_match( '/licen[sc]e|api[ _-]?key|subscription/', $message ) ) { return 'license_required'; }
+	if ( preg_match( '/incompatible_php|requires_php/', $code ) ) { return 'incompatible_php'; }
+	if ( preg_match( '/incompatible_(wp|wordpress)|requires_wordpress/', $code ) ) { return 'incompatible_wordpress'; }
+	if ( preg_match( '/incompatible_(mysql|database)|requires_mysql/', $code ) ) { return 'incompatible_database'; }
+	if ( preg_match( '/incompatible_archive|empty_archive/', $code ) ) { return 'invalid_package'; }
+	if ( preg_match( '/rollback_failed|restore.*failed/', $code ) ) { return 'rollback_failed'; }
+	if ( preg_match( '/insufficient.*(disk|space)|disk_full/', $code ) ) { return 'insufficient_disk_space'; }
+	foreach ( array( 'copy_failed', 'mkdir_failed', 'remove_old_failed', 'move_failed' ) as $reason ) {
+		if ( 0 === strpos( $code, $reason ) ) { return $reason; }
+	}
+	if ( preg_match( '/maintenance/', $code ) ) { return 'maintenance_mode'; }
+	if ( in_array( $code, array( 'locked', 'locked_by_another_process', 'already_updating' ), true ) ) { return 'already_updating'; }
+	if ( preg_match( '/timed? ?out|timeout|curl error 28/', $message ) ) { return 'download_timeout'; }
+	if ( preg_match( '/certificate|ssl.*verif|curl error 60/', $message ) ) { return 'tls_verification_failed'; }
+	if ( preg_match( '/429|too many requests|rate.limit/', $message ) ) { return 'provider_rate_limited'; }
+	if ( preg_match( '/\b50[0234]\b|bad gateway|service unavailable/', $message ) ) { return 'provider_unavailable'; }
+	if ( preg_match( '/unauthori[sz]ed|forbidden|\b40[13]\b/', $message ) ) { return 'provider_forbidden'; }
+	if ( preg_match( '/\b404\b/', $message ) ) { return 'package_unavailable'; }
 	if ( preg_match( '/rollback|rolled.back|fatal.error/', $code . ' ' . $message ) ) { return 'rollback'; }
 	if ( preg_match( '/incompatible|requires.php|requires.wordpress/', $code ) ) { return 'incompatible'; }
 	if ( preg_match( '/no_package|package_not_available|not_found/', $code ) ) { return 'package_unavailable'; }
@@ -54,10 +71,14 @@ function failure_installed_versions( $inventory ) {
 	foreach ( $inventory as $item ) { $type = 'core' === $item['type'] ? 'core' : substr( $item['type'], 0, -1 ); $versions[ $type . ':' . $item['installed_id'] ] = $item['version']; }
 	return $versions;
 }
-function automatic_update_failures( $inventory ) {
+function automatic_update_failures( $inventory, $specific = true ) {
 	$failures = get_option( 'sunrise_automatic_update_failures', array() ); $versions = failure_installed_versions( $inventory ); $remaining = $failures;
 	foreach ( $remaining as $key => $failure ) {
 		if ( isset( $versions[ $key ] ) && version_compare( $versions[ $key ], $failure['version'], '>=' ) ) { unset( $remaining[ $key ] ); }
+	}
+	if ( ! $specific ) {
+		$legacy = array( 'incompatible_php' => 'incompatible', 'incompatible_wordpress' => 'incompatible', 'incompatible_database' => 'incompatible', 'invalid_package' => 'package_unavailable', 'copy_failed' => 'files_not_writable', 'mkdir_failed' => 'files_not_writable', 'remove_old_failed' => 'files_not_writable', 'move_failed' => 'files_not_writable', 'insufficient_disk_space' => 'files_not_writable', 'maintenance_mode' => 'files_not_writable', 'already_updating' => 'unknown', 'download_timeout' => 'download_failed', 'tls_verification_failed' => 'download_failed', 'provider_rate_limited' => 'download_failed', 'provider_unavailable' => 'download_failed', 'provider_forbidden' => 'license_required', 'rollback_failed' => 'rollback' );
+		foreach ( $remaining as &$failure ) { if ( isset( $legacy[ $failure['code'] ] ) ) { $failure['code'] = $legacy[ $failure['code'] ]; } } unset( $failure );
 	}
 	// Filter the report without overwriting a failure captured by a concurrent automatic updater.
 	return array_values( $remaining );

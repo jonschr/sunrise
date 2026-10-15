@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.23 — 2026-10-15
+
+- Report the site’s PHP version after Control negotiates support, with a bounded follow-up for the first report.
+- Preserve detailed update preflight codes and classify compatibility, package, download/provider, filesystem, disk-space, maintenance, lock and rollback failures without transmitting raw provider messages or credentials. Keep older Control versions compatible.
+- Identify caught PHP argument, type, syntax and runtime errors separately from other updater exceptions.
+
 ## 0.3.22 — 2026-10-15
 
 - Bind installation identity, enrollment, policy checks, and wake authentication to the configured WordPress address. Background HTTP scheme changes and translated frontend links no longer look like a moved or cloned site; real configured URL changes still require review.
