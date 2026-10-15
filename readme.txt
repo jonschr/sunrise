@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.18
+Stable tag: 0.3.19
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,9 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.19 =
+Report sanitized fatal-error messages and code-only stack traces when available. Negotiate details with Control while preserving older-server compatibility.
 
 = 0.3.18 =
 Add WP Migrate license delivery from Control, native activation/reactivation, and cached licensing for background updates.

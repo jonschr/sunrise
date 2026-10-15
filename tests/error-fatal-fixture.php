@@ -4,4 +4,4 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! 
 $backup = array( 'states' => Sunrise\agent_states(), 'groups' => get_option( 'sunrise_error_groups', null ), 'lock' => get_option( 'sunrise_error_capture_lock', null ) );
 if ( ! add_option( 'sunrise_error_fixture_backup', $backup, '', false ) ) { WP_CLI::error( 'Could not preserve fixture state.' ); }
 $state = Sunrise\agent_state();$state['errors_enabled'] = true;Sunrise\agent_store( $state );delete_option( 'sunrise_error_groups' );delete_option( 'sunrise_error_capture_lock' );
-trigger_error( 'private-fixture-payload', E_USER_ERROR );
+trigger_error( 'Fixture fatal error: token=private-fixture-payload', E_USER_ERROR );

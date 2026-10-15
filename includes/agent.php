@@ -672,6 +672,7 @@ function agent_check_in( $routine = false ) {
 		$state['site_profiles'] = isset( $response['site_profiles'] ) && true === $response['site_profiles'];
 		if ( isset( $state['pending_report']['site_profile'] ) ) { $state['site_profile_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['site_profile'] ) ); }
 		$state['errors_supported'] = isset( $response['error_reports'] ) && true === $response['error_reports'];
+		$state['error_details_supported'] = isset( $response['error_details'] ) && true === $response['error_details'];
 		$license_refreshed = false;
 		if ( isset( $response['premium_licenses'] ) ) { $licenses = premium_license_sync( $state, $response['premium_licenses'] ); if ( is_wp_error( $licenses ) ) { return $licenses; } $license_refreshed = $licenses; }
 		if ( isset( $state['pending_report']['refresh_ack']['id'], $state['refresh_result']['id'] ) && $state['pending_report']['refresh_ack']['id'] === $state['refresh_result']['id'] ) { $state['refresh_ack_pending'] = false; }

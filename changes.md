@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.19 — 2026-10-15
+
+- Capture bounded, sanitized fatal-error messages and up to twelve code-only stack frames when PHP provides them. Never retain trace arguments or objects; redact common credentials, emails, URLs, queries, and absolute paths from messages. Custom application text may still appear.
+- Negotiate diagnostic details with Control while preserving legacy summary delivery and acknowledgments. Existing reports cannot recover discarded messages or traces.
+- Verify real fatal capture on PHP 8.1 and 8.5, credential redaction, and WordPress recovery and delivery compatibility.
+
 ## 0.3.18 — 2026-10-15
 
 - Add WP Migrate to encrypted license delivery from Control. Use its native activation and reactivation API, preserve license key formatting, and respect a configured WPMDB_LICENCE constant.
