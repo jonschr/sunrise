@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.17/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.18/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Report routine check-ins separately from bonus activity so Control can show whether the normal schedule is being followed."
+    "changelog": "Receive WP Migrate licenses from Control and use its native activation, reactivation, and background updater state."
   }
 }

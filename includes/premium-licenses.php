@@ -9,6 +9,7 @@ function premium_license_plugins() {
 		'admin-columns-pro' => 'admin-columns-pro/admin-columns-pro.php',
 		'generateblocks-pro' => 'generateblocks-pro/plugin.php',
 		'gp-premium'       => 'gp-premium/gp-premium.php',
+		'wp-migrate-db-pro' => 'wp-migrate-db-pro/wp-migrate-db-pro.php',
 	);
 }
 
@@ -24,6 +25,10 @@ function premium_license_metadata( $value ) {
 }
 
 function premium_license_valid( $id ) {
+	if ( 'wp-migrate-db-pro' === $id ) {
+		$license = premium_license_migrate_provider();
+		return $license && $license->get_licence_key() && ! is_wp_error( premium_license_migrate_response( get_site_transient( \DeliciousBrains\WPMDB\Common\Helpers::get_licence_response_transient_key( get_current_user_id(), false ) ) ) );
+	}
 	if ( 'advanced-custom-fields-pro' === $id ) {
 		if ( ! function_exists( 'acf_pro_get_license_key' ) || ! \acf_pro_get_license_key() ) { return false; }
 		return function_exists( 'acf_pro_is_license_active' ) ? \acf_pro_is_license_active() : true;
@@ -93,6 +98,7 @@ function premium_license_clear_edd_cache( $id, $key ) {
 function premium_license_activate( $id, $key ) {
 	if ( 'advanced-custom-fields-pro' === $id ) { return premium_license_activate_acf( trim( $key ) ); }
 	if ( 'admin-columns-pro' === $id ) { return premium_license_activate_admin_columns( trim( $key ) ); }
+	if ( 'wp-migrate-db-pro' === $id ) { return premium_license_activate_migrate( trim( $key ) ); }
 	$key = sanitize_key( $key ); $gp = 'gp-premium' === $id; $response = wp_remote_post( $gp ? 'https://generatepress.com' : 'https://generateblocks.com', array(
 		'timeout' => 15, 'redirection' => 0, 'body' => array( 'edd_action' => 'activate_license', 'license' => $key, 'item_name' => rawurlencode( $gp ? 'GP Premium' : 'GenerateBlocks Pro' ), 'url' => home_url() ),
 	) );
@@ -152,5 +158,43 @@ function premium_license_activate_admin_columns( $key ) {
 	update_option( 'acp_subscription_details', array( 'status' => $details['status'], 'renewal_method' => $details['renewal_method'], 'expiry_date' => $expiry ) ); update_option( 'acp_subscription_details_key', $activation_key ); delete_option( 'acp_subscription_key' );
 	if ( 'active' !== $details['status'] ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'License key is not active.' ); }
 	$products = premium_license_acp_request( 'products_update', array( 'activation_url' => site_url(), 'activation_key' => $activation_key ), $version ); if ( ! is_wp_error( $products ) ) { update_option( 'acp_update_plugins_data', $products ); }
+	return true;
+}
+
+/** Use WP Migrate's own API and storage, including its cron-compatible global license. */
+function premium_license_migrate_provider() {
+	if ( ! function_exists( 'wp_migrate_db_pro' ) || ! class_exists( '\\DeliciousBrains\\WPMDB\\WPMDBDI' ) ) { return false; }
+	try { return \DeliciousBrains\WPMDB\WPMDBDI::getInstance()->get( \DeliciousBrains\WPMDB\Pro\License::class ); }
+	catch ( \Throwable $error ) { return false; }
+}
+
+function premium_license_migrate_response( $response ) {
+	$data = is_string( $response ) ? json_decode( $response, true ) : null;
+	if ( ! is_array( $data ) || '{' !== substr( ltrim( $response ), 0, 1 ) || ( isset( $data['errors'] ) && ! is_array( $data['errors'] ) ) || ! empty( $data['dbrains_api_down'] ) || ! empty( $data['errors']['connection_failed'] ) ) {
+		return new \WP_Error( 'sunrise_premium_license_temporary', 'License service unavailable or returned an invalid response.' );
+	}
+	if ( ! empty( $data['errors'] ) ) {
+		$reactivate = 1 === count( $data['errors'] ) && isset( $data['errors']['activation_deactivated'] );
+		return new \WP_Error( $reactivate ? 'sunrise_premium_license_reactivate' : 'sunrise_premium_license_invalid', 'License key was not accepted.' );
+	}
+	return $data;
+}
+
+function premium_license_activate_migrate( $key ) {
+	if ( defined( 'WPMDB_LICENCE' ) && ( ! is_string( WPMDB_LICENCE ) || ! hash_equals( WPMDB_LICENCE, $key ) ) ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'WP Migrate license is configured in wp-config.php.' ); }
+	$license = premium_license_migrate_provider();
+	if ( ! $license || ! get_current_user_id() ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'WP Migrate license activation is unavailable.' ); }
+	$args = array( 'licence_key' => urlencode( $key ), 'site_url' => urlencode( untrailingslashit( network_home_url( '', 'http' ) ) ) );
+	$result = premium_license_migrate_response( $license->api->dbrains_api_request( 'activate_licence', $args ) );
+	if ( is_wp_error( $result ) && 'sunrise_premium_license_reactivate' === $result->get_error_code() ) { $result = premium_license_migrate_response( $license->api->dbrains_api_request( 'reactivate_licence', $args ) ); }
+	if ( is_wp_error( $result ) ) { return $result; }
+	if ( ! defined( 'WPMDB_LICENCE' ) ) { $license->set_licence_key( $key ); $license->set_global_licence_key( $key ); }
+	delete_site_transient( 'wpmdb_upgrade_data' ); delete_site_transient( 'wpmdb_licence_response' );
+	delete_site_transient( \DeliciousBrains\WPMDB\Common\Helpers::get_licence_response_transient_key( get_current_user_id(), false ) );
+	$response = $license->check_licence( $key, get_current_user_id() ); $result = premium_license_migrate_response( $response );
+	if ( is_wp_error( $result ) ) { return $result; }
+	set_site_transient( 'wpmdb_licence_response', $response, $license->props->transient_timeout );
+	// Refresh WP Migrate's static download credential after updating native storage.
+	premium_license_migrate_provider();
 	return true;
 }

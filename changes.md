@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.18 — 2026-10-15
+
+- Add WP Migrate to encrypted license delivery from Control. Use its native activation and reactivation API, preserve license key formatting, and respect a configured WPMDB_LICENCE constant.
+- Update native per-user and cron-compatible global license storage, clear stale upgrade/license caches, and refresh the native download credential. Keep normal validity checks local and preserve existing retry limits.
+- Verify WP Migrate 2.6.13 and 2.7.7 with intercepted vendor responses in an isolated cron fixture.
+
 ## 0.3.17 — 2026-10-14
 
 - Classify normal scheduled and overdue traffic check-ins separately from manual checks, signed wakes, setup, early continuations, and immediate follow-up reports.

@@ -188,3 +188,7 @@ From 0.2.3, packaged Sunrise installations select their own published GitHub rel
 ### WP Migrate update discovery
 
 Sunrise 0.3.16 initializes WP Migrate’s standard provider before inventory, explicit refreshes, and plugin installation validation. WP Migrate normally skips this provider in cron, even when its cached upgrade information is available. Version selection, beta opt-in and licensed packages stay with the provider; only sanitized availability/version metadata reaches Control. Run `php tests/migrate-updates-check.php /absolute/disposable/wordpress/root` with WP Migrate files installed on an isolated Cove site (`SUNRISE_TEST_SITE`, local environment, cron disabled) to verify the real cron path without downloading or installing an update.
+
+### WP Migrate license delivery
+
+From Sunrise 0.3.18, Control can supply a WP Migrate license to installations with the active `wp-migrate-db-pro/wp-migrate-db-pro.php` plugin. Activation uses WP Migrate’s own API and user/global license storage, including its reactivation flow. A different `WPMDB_LICENCE` constant takes precedence and is never overwritten. Validity checks use cached state; unchanged rejected keys and temporary failures follow the existing retry limits. `php tests/migrate-licenses-check.php /absolute/disposable/wordpress/root` exercises actual WP Migrate code with intercepted HTTP; add `constant` to check a wp-config conflict. The fixture requires `SUNRISE_TEST_SITE`, a local environment, disabled cron, and WP Migrate files. No real license or vendor request is required.
