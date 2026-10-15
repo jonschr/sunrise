@@ -129,7 +129,7 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 	if ( ! empty( $state['revoked'] ) ) { agent_log( 'request_blocked', array( 'endpoint' => $endpoint, 'code' => 'sunrise_disconnected' ) ); return new \WP_Error( 'sunrise_disconnected', 'This connection was disconnected. Reconnect this administrator to continue.', array( 'status' => 401 ) ); }
 	if ( $identity_required ) { $identity = installation_guard(); if ( is_wp_error( $identity ) ) { agent_log( 'request_blocked', array( 'endpoint' => $endpoint, 'code' => $identity->get_error_code() ) ); return $identity; } }
 	if ( ! agent_owner_valid( $state ) || (int) $state['user_id'] !== get_current_user_id() ) { agent_log( 'request_blocked', array( 'endpoint' => $endpoint, 'code' => 'sunrise_agent_owner' ) ); return new \WP_Error( 'sunrise_agent_owner', 'Connection owner access required.' ); }
-	if ( ! agent_service_matches( $state ) || $state['url'] !== untrailingslashit( site_url() ) ) {
+	if ( ! agent_service_matches( $state ) || $state['url'] !== installation_site_url() ) {
 		agent_log( 'request_blocked', array( 'endpoint' => $endpoint, 'code' => 'sunrise_agent_environment' ) );
 		return new \WP_Error( 'sunrise_agent_environment', 'The enrolled site URL or Control address changed. Reconnect this installation.' );
 	}
@@ -157,7 +157,7 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 }
 
 /** Rotate a credential only after Control approves the existing site record. */
-function agent_reconnect( $state ) {
+function agent_reconnect( $state, $renew_expired = true ) {
 	require_once __DIR__ . '/controller.php';
 	if ( ! agent_service_matches( $state ) ) { return new \WP_Error( 'sunrise_agent_environment', 'The Control address changed. Connect this site to the selected environment.' ); }
 	if ( ! agent_reconnectable( $state ) || empty( $state['site_id'] ) || empty( $state['generation'] ) || empty( $state['account_id'] ) || empty( $state['network_id'] ) ) {
@@ -192,7 +192,11 @@ function agent_reconnect( $state ) {
 	if ( is_wp_error( $assignment ) ) {
 		agent_log( 'recovery_exchange_failed', array_merge( array( 'enrollment_id' => $state['reconnect']['enrollment_id'] ), agent_error_details( $assignment ) ) );
 		$data = $assignment->get_error_data();
-		if ( is_array( $data ) && 410 === ( $data['status'] ?? null ) ) { unset( $state['reconnect']['enrollment_id'] ); agent_store( $state ); }
+		if ( is_array( $data ) && ( 410 === ( $data['status'] ?? null ) || ( 401 === ( $data['status'] ?? null ) && 'invalid_credential' === ( $data['remote_code'] ?? null ) ) ) ) {
+			unset( $state['reconnect']['enrollment_id'], $state['reconnect']['approval_url'], $state['reconnect']['phrase'] );
+			if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not renew the reconnection request.' ); }
+			if ( $renew_expired ) { return agent_reconnect( $state, false ); }
+		}
 		return $assignment;
 	}
 	if ( 'approved' !== ( $assignment['status'] ?? null ) ) { agent_log( 'recovery_waiting_for_approval', array( 'enrollment_id' => $state['reconnect']['enrollment_id'] ) ); return new \WP_Error( 'sunrise_reconnect_pending', 'Approve this reconnection in Sunrise Control.', array( 'status' => 202 ) ); }
@@ -201,10 +205,7 @@ function agent_reconnect( $state ) {
 		agent_log( 'recovery_assignment_rejected', array( 'expected_site_id' => $state['reconnect']['site_id'], 'received_site_id' => $assignment['site_id'] ?? null, 'base_generation' => (int) $state['reconnect']['generation'], 'received_generation' => isset( $assignment['generation'] ) ? (int) $assignment['generation'] : null ) );
 		return new \WP_Error( 'sunrise_reconnect_invalid', 'Sunrise Control returned an invalid reconnection.' );
 	}
-	$identity = installation_identity();
-	if ( ! installation_anchor() && ! installation_write_anchor( $identity['id'] ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not restore the installation identity.' ); }
-	$identity = array_merge( $identity, installation_markers( $identity['id'] ), array( 'review' => false, 'anchor_required' => true ) );
-	if ( ! update_option( 'sunrise_installation', $identity, false ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not confirm the installation identity.' ); }
+	$confirmed = agent_confirm_installation(); if ( is_wp_error( $confirmed ) ) { return $confirmed; }
 	$state['enrollment_id'] = $state['reconnect']['enrollment_id'];
 	$state['generation'] = (int) $assignment['generation'];
 	unset( $state['reconnect'] );
@@ -213,9 +214,18 @@ function agent_reconnect( $state ) {
 	return true;
 }
 
+/** Called only after Control approves replacement credentials for this same installation. */
+function agent_confirm_installation() {
+	$identity = installation_identity();
+	if ( ! installation_anchor() && ! installation_write_anchor( $identity['id'] ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not restore the installation identity.' ); }
+	$identity = array_merge( $identity, installation_markers( $identity['id'] ), array( 'review' => false, 'anchor_required' => true ) );
+	if ( get_option( 'sunrise_installation' ) !== $identity && ! update_option( 'sunrise_installation', $identity, false ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not confirm the installation identity.' ); }
+	return true;
+}
+
 /** A started reconnection may finish after migration cleanup changes its original local markers. */
 function agent_reconnectable( $state ) {
-	if ( empty( $state['url'] ) || $state['url'] !== untrailingslashit( site_url() ) ) { return false; }
+	if ( empty( $state['url'] ) || $state['url'] !== installation_site_url() ) { return false; }
 	$identity = installation_identity(); $anchor = installation_anchor();
 	$markers = is_array( $identity ) && ! empty( $identity['id'] ) ? installation_markers( $identity['id'] ) : array();
 	return is_array( $identity ) && ! empty( $identity['id'] ) && wp_is_uuid( $identity['id'], 4 ) && isset( $identity['url_hash'] ) && hash_equals( $identity['url_hash'], $markers['url_hash'] ) && ( ! $anchor || hash_equals( $identity['id'], $anchor ) );
@@ -227,17 +237,20 @@ function agent_enroll( $intent = null ) {
 	try { return agent_enroll_locked( $intent ); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
-function agent_enroll_locked( $intent = null ) {
+function agent_enroll_locked( $intent = null, $recover_identity = false ) {
 	if ( ! agent_url() || ! current_user_can( 'manage_options' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'Administrator access and a trusted SUNRISE_CONTROL_URL are required.' ); }
 	$access = agent_access( true ); if ( is_wp_error( $access ) ) { return $access; }
-	$identity = installation_guard(); if ( is_wp_error( $identity ) ) { return $identity; }
 	$state = agent_state();
+	$identity = installation_guard();
+	$recover_identity = $recover_identity || ! empty( $state['identity_recovery'] );
+	if ( is_wp_error( $identity ) && ( ! $recover_identity || ! agent_reconnectable( array( 'url' => installation_site_url() ) ) ) ) { return $identity; }
 	if ( $state && ( ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) ) {
 		$cleared = agent_disconnect_locked(); if ( is_wp_error( $cleared ) ) { return $cleared; } $state = array();
 	}
 	if ( ! $state ) {
 		require_once __DIR__ . '/controller.php';
-		$state = array( 'control_url' => agent_url(), 'url' => untrailingslashit( site_url() ), 'user_id' => get_current_user_id(), 'sequence' => 0 );
+		$state = array( 'control_url' => agent_url(), 'url' => installation_site_url(), 'user_id' => get_current_user_id(), 'sequence' => 0 );
+		if ( $recover_identity ) { $state['identity_recovery'] = true; }
 		if ( ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator needs all update capabilities.' ); }
 		$secret = bin2hex( random_bytes( 32 ) );
 		$state['secret'] = credential( $secret, 'agent|' . $state['url'] . '|' . $state['user_id'] );
@@ -250,7 +263,7 @@ function agent_enroll_locked( $intent = null ) {
 		$previous = $state;
 		$request = array( 'credential_digest' => $state['digest'], 'url' => $state['url'], 'local_user_id' => $state['user_id'], 'environment' => wp_get_environment_type() );
 		if ( is_string( $intent ) && preg_match( '/^[a-f0-9]{64}$/D', $intent ) ) { $request['intent_digest'] = hash( 'sha256', $intent ); }
-		$result = agent_http( 'enrollments', $request, $state );
+		$result = agent_http( 'enrollments', $request, $state, 'POST', empty( $state['identity_recovery'] ) );
 		if ( is_wp_error( $result ) ) { return $result; }
 		$state['enrollment_id'] = $result['id'];
 		$state['approval_url'] = $result['approval_url'];
@@ -309,13 +322,14 @@ function agent_connection_diagnostics( $state, $user_id ) {
 	$next = wp_next_scheduled( 'sunrise_check_in', array( (int) $user_id ) );
 	return array(
 		'user_id' => (int) $user_id, 'owner_valid' => agent_owner_valid( $state ), 'connected' => ! empty( $state['site_id'] ), 'revoked' => ! empty( $state['revoked'] ), 'paused' => ! empty( $state['paused'] ),
-		'control_url' => $state['control_url'] ?? null, 'site_url' => $state['url'] ?? null, 'current_site_url' => untrailingslashit( site_url() ),
-		'control_matches' => agent_service_matches( $state ), 'site_url_matches' => isset( $state['url'] ) && $state['url'] === untrailingslashit( site_url() ),
+		'control_url' => $state['control_url'] ?? null, 'site_url' => $state['url'] ?? null, 'current_site_url' => installation_site_url(),
+		'control_matches' => agent_service_matches( $state ), 'site_url_matches' => isset( $state['url'] ) && $state['url'] === installation_site_url(),
 		'account_id' => $state['account_id'] ?? null, 'network_id' => $state['network_id'] ?? null, 'site_id' => $state['site_id'] ?? null,
 		'enrollment_id' => $state['enrollment_id'] ?? null, 'generation' => isset( $state['generation'] ) ? (int) $state['generation'] : null, 'sequence' => isset( $state['sequence'] ) ? (int) $state['sequence'] : null,
 		'last_success' => isset( $state['last_success'] ) ? gmdate( 'c', $state['last_success'] ) : null, 'next_scheduled_check_in' => $next ? gmdate( 'c', $next ) : null,
 		'pending_report_sequence' => isset( $state['pending_report']['sequence'] ) ? (int) $state['pending_report']['sequence'] : null,
 		'recovery' => empty( $state['reconnect'] ) ? null : array( 'site_id' => $state['reconnect']['site_id'] ?? null, 'base_generation' => isset( $state['reconnect']['generation'] ) ? (int) $state['reconnect']['generation'] : null, 'enrollment_id' => $state['reconnect']['enrollment_id'] ?? null ),
+		'identity_recovery' => ! empty( $state['identity_recovery'] ),
 		'traffic_check_in_throttled' => (bool) get_transient( 'sunrise_reconnect_fallback_' . (int) $user_id ),
 	);
 }
@@ -583,17 +597,22 @@ function agent_check_in( $routine = false ) {
 		if ( ! $state || empty( $state['enrollment_id'] ) ) { return new \WP_Error( 'sunrise_not_enrolled', 'Start enrollment first.' ); }
 		if ( ! empty( $state['revoked'] ) ) { return new \WP_Error( 'sunrise_disconnected', 'This connection was disconnected. Reconnect this administrator to continue.' ); }
 		$identity = installation_guard();
-		if ( is_wp_error( $identity ) || ! empty( $state['reconnect'] ) ) {
+		$recover_identity = ! empty( $state['identity_recovery'] ) && empty( $state['site_id'] ) && agent_reconnectable( $state );
+		if ( ! $recover_identity && ( is_wp_error( $identity ) || ! empty( $state['reconnect'] ) ) ) {
 			$reconnected = agent_reconnect( $state ); if ( is_wp_error( $reconnected ) ) { return $reconnected; }
 			$state = agent_state();
 		}
 		if ( ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_agent_owner', 'The enrolling user no longer has update capabilities.' ); }
 		wp_set_current_user( $state['user_id'] );
 		if ( empty( $state['site_id'] ) ) {
-			$assignment = agent_http( 'enrollments/' . $state['enrollment_id'] . '/exchange', array(), $state );
+			$assignment = agent_http( 'enrollments/' . $state['enrollment_id'] . '/exchange', array(), $state, 'POST', ! $recover_identity );
 			if ( is_wp_error( $assignment ) ) { return $assignment; }
 			if ( 'approved' !== $assignment['status'] ) { return new \WP_Error( 'sunrise_approval_pending', 'Approve this site in Sunrise Control before finishing the connection.' ); }
 			foreach ( array( 'account_id', 'network_id', 'site_id', 'generation' ) as $key ) { $state[ $key ] = $assignment[ $key ]; }
+			if ( $recover_identity ) {
+				$confirmed = agent_confirm_installation(); if ( is_wp_error( $confirmed ) ) { return $confirmed; }
+				unset( $state['identity_recovery'] );
+			}
 		}
 		$sequence_rebased = false;
 		while ( true ) {
@@ -693,12 +712,12 @@ function agent_disconnect() {
 	try { return agent_disconnect_locked(); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
-function agent_disconnect_locked() {
+function agent_disconnect_locked( $revoke = true ) {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	$state = agent_state();
 	if ( ! empty( $state['remote_job'] ) || get_option( 'sunrise_remote_job_fence' ) ) { return new \WP_Error( 'sunrise_job_pending', 'Finish or reconcile the pending update before reconnecting or clearing this connection.' ); }
 	// A changed environment must never receive the old credential or revoke the old remote record.
-	if ( $state && agent_service_matches( $state ) && ! empty( $state['site_id'] ) && empty( $state['revoked'] ) ) {
+	if ( $revoke && $state && agent_service_matches( $state ) && ! empty( $state['site_id'] ) && empty( $state['revoked'] ) ) {
 		$result = agent_http( 'agent/enrollment', array(), $state, 'DELETE' );
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();
@@ -710,6 +729,22 @@ function agent_disconnect_locked() {
 	wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) );
 	delete_option( 'sunrise_routine_check_in_' . get_current_user_id() );
 	return array( 'disconnected' => true );
+}
+
+/** Explicit escape from a stale/deleted remote record; never needs the old credential. */
+function agent_restart_enrollment( $confirmed = false ) {
+	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
+	if ( ! current_user_can( 'update_plugins' ) || ! current_user_can( 'update_themes' ) || ! current_user_can( 'update_core' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator needs all update capabilities.' ); }
+	if ( true !== $confirmed ) { return new \WP_Error( 'sunrise_agent_confirmation', 'Confirm that you want a new site connection.' ); }
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	try {
+		$identity = installation_guard();
+		if ( is_wp_error( $identity ) && ! agent_reconnectable( agent_state() ) ) { return $identity; }
+		$cleared = agent_disconnect_locked( false ); if ( is_wp_error( $cleared ) ) { return $cleared; }
+		agent_log( 'enrollment_restarted' );
+		return agent_enroll_locked( null, is_wp_error( $identity ) );
+	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
 /** Acknowledge a newly received policy now, rather than waiting for the next routine report. */

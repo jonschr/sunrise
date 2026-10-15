@@ -26,7 +26,7 @@ try {
  $_GET = array(); ob_start(); Sunrise\agent_environment_form(); sunrise_environment_assert( '' === ob_get_clean(), 'Environment setting is hidden from the normal screen' );
  $_GET['sunrise_environment'] = '1'; ob_start(); Sunrise\agent_environment_form(); $html = ob_get_clean();
  sunrise_environment_assert( false !== strpos( $html, 'name="_wpnonce"' ) && false !== strpos( $html, 'Save environment' ), 'Hidden setting renders a nonce-protected form' );
- $state = array( 'control_url' => Sunrise\agent_url(), 'url' => untrailingslashit( site_url() ), 'user_id' => $owner, 'sequence' => 7, 'site_id' => wp_generate_uuid4(), 'enrollment_id' => wp_generate_uuid4(), 'generation' => 1 );
+ $state = array( 'control_url' => Sunrise\agent_url(), 'url' => Sunrise\installation_site_url(), 'user_id' => $owner, 'sequence' => 7, 'site_id' => wp_generate_uuid4(), 'enrollment_id' => wp_generate_uuid4(), 'generation' => 1 );
  $old_secret = bin2hex( random_bytes( 32 ) ); $state['secret'] = Sunrise\credential( $old_secret, 'agent|' . $state['url'] . '|' . $owner ); $state['digest'] = hash( 'sha256', $old_secret );
  Sunrise\agent_store( $state );
  WP_Upgrader::create_lock( 'sunrise_agent', 120 ); sunrise_environment_assert( is_wp_error( Sunrise\agent_set_environment( 'staging' ) ), 'Active connection work blocks an environment change' ); WP_Upgrader::release_lock( 'sunrise_agent' );

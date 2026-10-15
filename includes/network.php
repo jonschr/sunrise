@@ -115,7 +115,7 @@ function managed_network_page() {
 	$values = array(
 		__( 'Owned by', 'sunrise' ) => wp_get_current_user()->display_name,
 		__( 'Site', 'sunrise' ) => home_url( '/' ),
-		__( 'Status', 'sunrise' ) => $identity_error ? ( ! empty( $state['reconnect']['enrollment_id'] ) ? __( 'Re-authentication waiting for Control approval', 'sunrise' ) : __( 'Re-authentication required', 'sunrise' ) ) : ( ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Your connection is paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ) ),
+		__( 'Status', 'sunrise' ) => ! empty( $state['reconnect'] ) ? __( 'Re-authentication waiting for Control approval', 'sunrise' ) : ( $identity_error ? __( 'Re-authentication required', 'sunrise' ) : ( ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Your connection is paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ) ) ),
 		__( 'Last successful check-in', 'sunrise' ) => $last,
 		__( 'Expected cadence', 'sunrise' ) => __( 'Approximately every 5 minutes', 'sunrise' ),
 		__( 'Next WordPress cron check-in', 'sunrise' ) => $next_label,
@@ -129,6 +129,10 @@ function managed_network_page() {
 	form_start( 'local', 'agent_sync' ); submit_button( __( 'Check in now', 'sunrise' ), 'primary', 'submit', false ); echo '</form>';
 	form_start( 'local', 'agent_reauthenticate' ); submit_button( __( 'Re-authenticate with Sunrise Control', 'sunrise' ), 'secondary', 'submit', false ); echo '</form>';
 	echo '<p>' . esc_html__( 'Re-authentication replaces this plugin’s Control credential while retaining the existing site record, policies, and history.', 'sunrise' ) . '</p>';
+	echo '<details><summary>' . esc_html__( 'Connection recovery', 'sunrise' ) . '</summary><p>' . esc_html__( 'If this site was removed from Control, or re-authentication cannot finish, start a new connection to get a fresh approval code. This replaces only your local connection. Any previous Control record and history remain separate; you will choose a network and approve a new site. Other administrators’ connections are retained.', 'sunrise' ) . '</p>';
+	form_start( 'local', 'agent_restart_enrollment' );
+	echo '<p><label><input type="checkbox" name="confirm_restart" value="1" required> ' . esc_html__( 'Replace my connection and approve this site again.', 'sunrise' ) . '</label></p>';
+	submit_button( __( 'Get a new connection code', 'sunrise' ), 'secondary', 'submit', false ); echo '</form></details>';
 	if ( agent_dashboard_url() ) { echo '<p><a href="' . esc_url( agent_dashboard_url() ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open Sunrise Control ↗', 'sunrise' ) . '</a></p>'; }
 	echo '</section><section class="sunrise-settings-card"><h2>' . esc_html__( 'Error summaries', 'sunrise' ) . '</h2><p><span class="sunrise-status' . ( error_reporting_enabled( $state ) ? '' : ' sunrise-status-disabled' ) . '">' . esc_html( error_reporting_enabled( $state ) ? __( 'Enabled by default', 'sunrise' ) : __( 'Disabled by local setting', 'sunrise' ) ) . '</span></p><p>' . esc_html__( 'Sunrise retains fatal-error locations, sampled counts, sanitized messages, and available code-only stack frames for up to three days. Trace arguments, objects, and request data are excluded.', 'sunrise' ) . '</p></section>';
 	echo '<details class="sunrise-advanced"><summary>' . esc_html__( 'Advanced local controls', 'sunrise' ) . '</summary><section><h3>' . esc_html__( 'Emergency update pause', 'sunrise' ) . '</h3><p>' . esc_html__( 'Temporarily blocks Sunrise-managed automatic updates on this site. Control policies remain saved and resume when you release the pause.', 'sunrise' ) . '</p>';

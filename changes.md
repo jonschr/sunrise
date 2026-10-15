@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.22 — 2026-10-15
+
+- Bind installation identity, enrollment, policy checks, and wake authentication to the configured WordPress address. Background HTTP scheme changes and translated frontend links no longer look like a moved or cloned site; real configured URL changes still require review.
+- Renew expired or deleted re-authentication requests with a fresh approval link instead of retrying a missing request forever. Clear stale approval details and bound renewal to one retry per attempt.
+- Add **Connection recovery → Get a new connection code** for deleted or stuck Control connections. Preserve other administrators, native update settings, and remote history; block resets during pending updates. Same-site identity recovery remains paused until fresh approval.
+
 ## 0.3.21 — 2026-10-15
 
 - Receive Soliloquy license keys from Control using the existing encrypted delivery and bounded retry flow. Verify through its native verify-key protocol over HTTPS, including older releases that hard-code HTTP. Preserve key formatting and unrelated settings; respect configured constants and license-key filters.

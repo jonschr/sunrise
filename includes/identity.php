@@ -31,9 +31,14 @@ function installation_write_anchor( $id ) {
 	return $ok;
 }
 
+/** Connection identity must not depend on the request's TLS or translated URL context. */
+function installation_site_url() {
+	return untrailingslashit( get_option( 'siteurl' ) );
+}
+
 function installation_markers( $id ) {
 	return array(
-		'url_hash' => hash( 'sha256', untrailingslashit( site_url() ) . "\n" . untrailingslashit( home_url() ) ),
+		'url_hash' => hash( 'sha256', installation_site_url() . "\n" . untrailingslashit( get_option( 'home' ) ) ),
 		// Local change detector only. Never send this marker or WordPress salts to Control.
 		'salt_check' => hash_hmac( 'sha256', 'sunrise-installation|' . $id, wp_salt( 'auth' ) ),
 	);
@@ -50,7 +55,7 @@ function installation_identity() {
 		foreach ( agent_states() as $agent ) {
 			require_once __DIR__ . '/controller.php';
 			// Upgrade an existing enrollment only if its old binding can still be verified.
-			if ( ! isset( $agent['url'], $agent['user_id'], $agent['secret'] ) || $agent['url'] !== untrailingslashit( site_url() )
+			if ( ! isset( $agent['url'], $agent['user_id'], $agent['secret'] ) || $agent['url'] !== installation_site_url()
 				|| is_wp_error( credential( $agent['secret'], 'agent|' . $agent['url'] . '|' . $agent['user_id'], true ) ) ) { $identity['review'] = true; }
 		}
 		add_option( 'sunrise_installation', $identity, '', false );

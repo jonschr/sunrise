@@ -23,7 +23,7 @@ $salt = function ( $value ) { return $value . '-test-rotation'; };
 $url = function () { return 'https://cloned.example'; };
 $home = function () { return 'https://different-home.example'; };
 $restore = function () use ( $wpdb, $prefix, $saved, $cron, $original_user, $salt, $url, $home, $anchor_path, $anchor_bytes ) {
-	remove_filter( 'salt', $salt ); remove_filter( 'site_url', $url ); remove_filter( 'home_url', $home );
+	remove_filter( 'salt', $salt ); remove_filter( 'option_siteurl', $url ); remove_filter( 'option_home', $home );
 	wp_set_current_user( $original_user );
 	foreach ( $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $prefix ) ) as $name ) { delete_option( $name ); }
 	foreach ( $saved as $name => $value ) { add_option( $name, $value, '', false ); }
@@ -44,7 +44,7 @@ try {
 	$overdue = $destination_connection; $overdue['last_success'] = time() - Sunrise\AGENT_INTERVAL - 1; Sunrise\agent_store( $overdue ); delete_transient( 'sunrise_reconnect_fallback_' . get_current_user_id() );
 	sunrise_identity_assert( Sunrise\agent_maybe_request_check_in() && $calls > 0, 'Ordinary traffic attempts an overdue check-in when host cron is disabled' );
 	Sunrise\agent_store( $destination_connection ); delete_transient( 'sunrise_reconnect_fallback_' . get_current_user_id() ); $calls = 0;
-	add_filter( 'site_url', $url );
+	add_filter( 'option_siteurl', $url );
 	$agent = Sunrise\agent_state(); $agent['url'] = $url(); update_option( 'sunrise_agents', array( get_current_user_id() => $agent ), false );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'URL hash detects a clone even when a migrator rewrites the saved enrollment URL' );
 	require_once WP_PLUGIN_DIR . '/sunrise/includes/admin.php'; ob_start(); Sunrise\admin_page(); $html = ob_get_clean();
@@ -54,7 +54,7 @@ try {
 	sunrise_identity_assert( is_wp_error( Sunrise\enqueue_job( array( 'request_id' => wp_generate_uuid4(), 'action' => 'refresh' ) ) )
 		&& is_wp_error( Sunrise\controller_request( array(), 'inventory' ) ) && 0 === $calls, 'Queued work and peer requests share the identity guard' );
 	$calls = 0;
-	remove_filter( 'site_url', $url );
+	remove_filter( 'option_siteurl', $url );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'Restoring the URL does not silently clear a detected mismatch' );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_resolve( 'clone', $id ) ) && is_wp_error( Sunrise\installation_resolve( 'clone', wp_generate_uuid4(), true ) ), 'Recovery requires confirmation and rejects stale identity forms' );
 	WP_Upgrader::create_lock( 'sunrise_agent', 120 );
@@ -105,7 +105,7 @@ try {
 	$restore(); $missing = Sunrise\installation_identity(); unlink( $anchor_path );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'A missing installation file cannot silently adopt a database identity' );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_resolve( 'same', $missing['id'], true ) ) && ! is_wp_error( Sunrise\installation_resolve( 'clone', $missing['id'], true ) ), 'Missing-file recovery requires a fresh identity unless the original file is restored' );
-	$restore(); Sunrise\installation_identity(); add_filter( 'home_url', $home );
+	$restore(); Sunrise\installation_identity(); add_filter( 'option_home', $home );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ), 'A changed home URL is detected independently of the WordPress URL' );
 	$restore(); delete_option( 'sunrise_installation' ); if ( file_exists( $anchor_path ) ) { unlink( $anchor_path ); }
 	$agent = Sunrise\agent_state(); $agent['secret'] = 'unreadable'; update_option( 'sunrise_agents', array( get_current_user_id() => $agent ), false );

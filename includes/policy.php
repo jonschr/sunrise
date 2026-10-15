@@ -26,7 +26,7 @@ function agent_effective_policy() {
 	$documents = array();
 	foreach ( $states as $state ) {
 		if ( ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { continue; }
-		if ( ! empty( $state['paused'] ) || ! agent_service_matches( $state ) || $state['url'] !== untrailingslashit( site_url() ) ) { return $off; }
+		if ( ! empty( $state['paused'] ) || ! agent_service_matches( $state ) || $state['url'] !== installation_site_url() ) { return $off; }
 		if ( ! empty( $state['site_id'] ) && ! empty( $state['applied'] ) ) { $documents[] = $state['applied']['document']; }
 	}
 	if ( ! $documents ) { return $off; }

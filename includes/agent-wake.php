@@ -21,7 +21,7 @@ function agent_wake_state( $request ) {
   || ! is_string( $signature ) || ! preg_match( '/^[a-f0-9]{64}$/D', $signature ) ) { return $denied; }
  foreach ( agent_states() as $state ) {
   if ( ( $state['site_id'] ?? null ) !== $data['site_id'] || ( $state['generation'] ?? null ) !== $data['generation'] || ! empty( $state['revoked'] ) || ! empty( $state['paused'] ) ) { continue; }
-  if ( ! agent_owner_valid( $state ) || ! agent_service_matches( $state ) || $state['url'] !== untrailingslashit( site_url() ) ) { return $denied; }
+  if ( ! agent_owner_valid( $state ) || ! agent_service_matches( $state ) || $state['url'] !== installation_site_url() ) { return $denied; }
   $key = agent_wake_key( $state );
   if ( is_wp_error( $key ) || ! hash_equals( hash_hmac( 'sha256', $request->get_body(), $key ), $signature ) || is_wp_error( installation_guard() ) ) { return $denied; }
   return $state;

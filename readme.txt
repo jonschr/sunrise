@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.21
+Stable tag: 0.3.22
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,9 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.22 =
+Add a confirmed recovery workflow with a fresh connection code, renew stale approval requests, and prevent request-specific URLs from triggering installation identity review.
 
 = 0.3.21 =
 Add Soliloquy license delivery, HTTPS verification, and native background updater support, including older Soliloquy versions.

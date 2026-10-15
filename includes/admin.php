@@ -106,6 +106,8 @@ add_action( 'admin_post_sunrise', function () {
 		$result = agent_set_environment( $input['environment'] ?? null );
 	} elseif ( 'agent_reauthenticate' === $action ) {
 		$result = agent_reauthenticate();
+	} elseif ( 'agent_restart_enrollment' === $action ) {
+		$result = agent_restart_enrollment( isset( $input['confirm_restart'] ) && '1' === $input['confirm_restart'] );
 	} elseif ( 'agent_disconnect' === $action ) {
 		$result = agent_disconnect();
 	} elseif ( 'agent_pause' === $action || 'agent_resume' === $action ) {
