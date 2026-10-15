@@ -9,6 +9,7 @@ function premium_license_plugins() {
 		'admin-columns-pro' => 'admin-columns-pro/admin-columns-pro.php',
 		'generateblocks-pro' => 'generateblocks-pro/plugin.php',
 		'gp-premium'       => 'gp-premium/gp-premium.php',
+		'soliloquy' => 'soliloquy/soliloquy.php',
 		'wp-migrate-db-pro' => 'wp-migrate-db-pro/wp-migrate-db-pro.php',
 	);
 }
@@ -25,6 +26,7 @@ function premium_license_metadata( $value ) {
 }
 
 function premium_license_valid( $id ) {
+	if ( 'soliloquy' === $id ) { return class_exists( '\\Soliloquy', false ) && \Soliloquy::get_instance()->get_license_key() && ! \Soliloquy::get_instance()->get_license_key_errors(); }
 	if ( 'wp-migrate-db-pro' === $id ) {
 		$license = premium_license_migrate_provider();
 		return $license && $license->get_licence_key() && ! is_wp_error( premium_license_migrate_response( get_site_transient( \DeliciousBrains\WPMDB\Common\Helpers::get_licence_response_transient_key( get_current_user_id(), false ) ) ) );
@@ -98,6 +100,7 @@ function premium_license_clear_edd_cache( $id, $key ) {
 function premium_license_activate( $id, $key ) {
 	if ( 'advanced-custom-fields-pro' === $id ) { return premium_license_activate_acf( trim( $key ) ); }
 	if ( 'admin-columns-pro' === $id ) { return premium_license_activate_admin_columns( trim( $key ) ); }
+	if ( 'soliloquy' === $id ) { return premium_license_activate_soliloquy( trim( $key ) ); }
 	if ( 'wp-migrate-db-pro' === $id ) { return premium_license_activate_migrate( trim( $key ) ); }
 	$key = sanitize_key( $key ); $gp = 'gp-premium' === $id; $response = wp_remote_post( $gp ? 'https://generatepress.com' : 'https://generateblocks.com', array(
 		'timeout' => 15, 'redirection' => 0, 'body' => array( 'edd_action' => 'activate_license', 'license' => $key, 'item_name' => rawurlencode( $gp ? 'GP Premium' : 'GenerateBlocks Pro' ), 'url' => home_url() ),
@@ -197,4 +200,40 @@ function premium_license_activate_migrate( $key ) {
 	// Refresh WP Migrate's static download credential after updating native storage.
 	premium_license_migrate_provider();
 	return true;
+}
+
+/** Match Soliloquy's verify-key protocol and native storage; older releases hard-code HTTP. */
+function premium_license_activate_soliloquy( $key ) {
+	if ( ! class_exists( '\\Soliloquy', false ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Soliloquy license activation is unavailable.' ); }
+	if ( ( defined( 'SOLILOQUY_LICENSE_KEY' ) && ( ! is_string( SOLILOQUY_LICENSE_KEY ) || ! hash_equals( SOLILOQUY_LICENSE_KEY, $key ) ) ) || apply_filters( 'soliloquy_license_key', $key ) !== $key ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'Soliloquy license is configured outside Sunrise.' ); }
+	$response = wp_safe_remote_post( 'https://soliloquywp.com/', array( 'timeout' => 15, 'redirection' => 0, 'body' => array( 'tgm-updater-action' => 'verify-key', 'tgm-updater-key' => $key, 'tgm-updater-wp-version' => get_bloginfo( 'version' ), 'tgm-updater-referer' => site_url() ) ) );
+	if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'License service unavailable.' ); }
+	$data = json_decode( wp_remote_retrieve_body( $response ) );
+	if ( ! is_object( $data ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
+	if ( ! empty( $data->error ) || isset( $data->key ) || isset( $data->author ) || isset( $data->expired ) || isset( $data->disabled ) ) { return new \WP_Error( 'sunrise_premium_license_invalid', 'License key was not accepted.' ); }
+	if ( ( empty( $data->type ) || ! is_string( $data->type ) ) && ( empty( $data->success ) || ! is_string( $data->success ) ) ) { return new \WP_Error( 'sunrise_premium_license_temporary', 'Invalid license service response.' ); }
+	$option = get_option( 'soliloquy', array() ); $option = is_array( $option ) ? $option : array();
+	$option['key'] = $key; if ( isset( $data->type ) && is_string( $data->type ) ) { $option['type'] = sanitize_text_field( $data->type ); }
+	$option['is_expired'] = false; $option['is_disabled'] = false; $option['is_invalid'] = false;
+	update_option( 'soliloquy', $option ); update_option( 'soliloquy_license_updates', time() + 12 * HOUR_IN_SECONDS ); delete_transient( '_sol_addons' );
+	if ( class_exists( '\\Soliloquy_License', false ) ) { \Soliloquy_License::get_instance()->key = $key; }
+	premium_license_soliloquy_provider( true );
+	return true;
+}
+
+/** Older Soliloquy releases skip their updater during cron; refresh its captured key without duplicate hooks. */
+function premium_license_soliloquy_provider( $refresh = false ) {
+	if ( ! class_exists( '\\Soliloquy', false ) || ! current_user_can( 'update_plugins' ) || ! premium_license_valid( 'soliloquy' ) ) { return; }
+	$base = \Soliloquy::get_instance(); $key = $base->get_license_key();
+	global $wp_filter;
+	foreach ( isset( $wp_filter['pre_set_site_transient_update_plugins'] ) ? $wp_filter['pre_set_site_transient_update_plugins']->callbacks : array() as $priority => $callbacks ) {
+		foreach ( $callbacks as $callback ) {
+			$function = $callback['function']; if ( ! is_array( $function ) || ! $function[0] instanceof \Soliloquy_Updater || 'soliloquy/soliloquy.php' !== $function[0]->plugin_path ) { continue; }
+			$updater = $function[0]; if ( ! $refresh && $updater->key === $key && 'https://soliloquywp.com/' === $updater->remote_url ) { return $updater; }
+			remove_filter( 'pre_set_site_transient_update_plugins', array( $updater, 'update_plugins_filter' ), $priority );
+			remove_filter( 'http_request_args', array( $updater, 'http_request_args' ) ); remove_filter( 'plugins_api', array( $updater, 'plugins_api' ) );
+		}
+	}
+	require_once WP_PLUGIN_DIR . '/soliloquy/includes/admin/updater.php';
+	return new \Soliloquy_Updater( array( 'plugin_name' => $base->plugin_name, 'plugin_slug' => $base->plugin_slug, 'plugin_path' => 'soliloquy/soliloquy.php', 'plugin_url' => trailingslashit( WP_PLUGIN_URL ) . 'soliloquy', 'remote_url' => 'https://soliloquywp.com/', 'version' => $base->version, 'key' => $key ) );
 }

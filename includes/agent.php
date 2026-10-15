@@ -424,8 +424,9 @@ function agent_item_identity( $type, $id ) {
 	return $identity;
 }
 
-/** WP Migrate skips its updater during cron; use its normal provider under the connection owner. */
+/** Load native premium updaters under the connection owner, including versions that skip cron. */
 function agent_prepare_update_providers() {
+	premium_license_soliloquy_provider();
 	if ( function_exists( 'wp_migrate_db_pro' ) ) { \wp_migrate_db_pro(); }
 }
 

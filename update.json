@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.20",
+  "version": "0.3.21",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.20/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.21/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Move Sunrise into Settings and update its admin page links and screen assets."
+    "changelog": "Receive Soliloquy license keys from Control, verify securely over HTTPS, and refresh native licensing and background updater state."
   }
 }

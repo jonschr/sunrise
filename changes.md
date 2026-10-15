@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.21 — 2026-10-15
+
+- Receive Soliloquy license keys from Control using the existing encrypted delivery and bounded retry flow. Verify through its native verify-key protocol over HTTPS, including older releases that hard-code HTTP. Preserve key formatting and unrelated settings; respect configured constants and license-key filters.
+- Update native license flags, type, refresh timing, and addon cache after accepted activation. Load the native core updater during cron, refresh its captured key without duplicate hooks, and preserve addon updaters.
+- Verify actual Soliloquy 2.5.7, 2.6.0, 2.6.6, 2.6.12, and 2.7.5 code in an isolated WordPress cron fixture with intercepted HTTP, including replacement, rejection, outage, malformed response, and configuration guards.
+
 ## 0.3.20 — 2026-10-15
 
 - Move Sunrise from the top-level WordPress sidebar into Settings > Sunrise. Retain administrator access requirements, update screen-specific assets and notice handling, and point page links, forms, and redirects at the Settings page. Remove the unused top-level menu icon styling.
