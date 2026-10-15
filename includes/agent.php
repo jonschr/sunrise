@@ -416,6 +416,11 @@ function agent_item_identity( $type, $id ) {
 	return $identity;
 }
 
+/** WP Migrate skips its updater during cron; use its normal provider under the connection owner. */
+function agent_prepare_update_providers() {
+	if ( function_exists( 'wp_migrate_db_pro' ) ) { \wp_migrate_db_pro(); }
+}
+
 /** Mirror standard Plugin Update Checker cache entries even when its owner only loads in wp-admin. */
 function agent_puc_update_offers( $updates ) {
 	if ( ! is_object( $updates ) ) { return $updates; }

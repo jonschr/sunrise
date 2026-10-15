@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.16 — 2026-10-14
+
+- Load WP Migrate’s normal update provider during background inventory, provider refreshes, and plugin installation checks. This fixes installed/target versions appearing in wp-admin but missing from cron reports. Keep provider license and download details on the WordPress site.
+- Add a disposable cron-context regression check using WP Migrate’s actual provider; no plugin updates are installed.
+
 ## 0.3.15 — 2026-10-14
 
 - Default to production at https://desk.sunrisecontrol.app.

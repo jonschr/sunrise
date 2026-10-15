@@ -89,6 +89,7 @@ function inventory() {
 	require_once ABSPATH . 'wp-admin/includes/update.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-automatic-updater.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	agent_prepare_update_providers();
 	$core    = get_site_transient( 'update_core' );
 	// Core updates replace this file while the loaded globals remain stale for the rest of the request.
 	$core_files = ( static function () { require ABSPATH . WPINC . '/version.php'; return array( 'version' => $wp_version, 'db_version' => $wp_db_version ); } )();

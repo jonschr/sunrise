@@ -182,3 +182,7 @@ To release: update `Version` and `VERSION` in sunrise.php, `Stable tag` and the 
 ### Sunrise self-updates
 
 From 0.2.3, packaged Sunrise installations select their own published GitHub releases for WordPress's native automatic updater even when the network's plugin policy is off. Other plugins are unaffected. Host restrictions, disabled offers, filesystem checks and cron availability still apply. Symlinked installations and Git checkouts are excluded to protect development work. Existing installations need the 0.2.3 update once to gain this behavior.
+
+### WP Migrate update discovery
+
+Sunrise 0.3.16 initializes WP Migrate’s standard provider before inventory, explicit refreshes, and plugin installation validation. WP Migrate normally skips this provider in cron, even when its cached upgrade information is available. Version selection, beta opt-in and licensed packages stay with the provider; only sanitized availability/version metadata reaches Control. Run `php tests/migrate-updates-check.php /absolute/disposable/wordpress/root` with WP Migrate files installed on an isolated Cove site (`SUNRISE_TEST_SITE`, local environment, cron disabled) to verify the real cron path without downloading or installing an update.

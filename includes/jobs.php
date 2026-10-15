@@ -234,6 +234,7 @@ function execute_task( $task ) {
 			return array( 'code' => 'refresh_throttled', 'next_refresh_at' => $last + 300 );
 		}
 		update_option( 'sunrise_last_refresh', time(), false );
+		agent_prepare_update_providers();
 		plugin_update_check( true );
 		foreach ( array( 'core', 'plugins', 'themes' ) as $type ) {
 			$cached = get_site_transient( 'update_' . $type );
@@ -290,6 +291,7 @@ function install_update( $task ) {
 		$current_version = get_bloginfo( 'version' );
 	} else {
 		if ( 'plugin' === $type ) {
+			agent_prepare_update_providers();
 			$items = get_plugins();
 			$current_version = isset( $items[ $id ] ) ? $items[ $id ]['Version'] : '';
 			if ( 'sunrise/sunrise.php' === $id ) { plugin_update_check( true ); }
