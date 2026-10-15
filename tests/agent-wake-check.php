@@ -4,6 +4,7 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! 
 $owner = get_current_user_id(); $states = Sunrise\agent_states(); $state = Sunrise\agent_state();
 if ( empty( $state['site_id'] ) ) { WP_CLI::error( 'Enrolled local fixture required.' ); }
 $cron = get_option( 'cron' ); $name = 'sunrise_wake_' . $owner; $last = get_option( $name, null ); $cron_lock = get_transient( 'doing_cron' ); $calls = 0;
+$routine_name = 'sunrise_routine_check_in_' . $owner; $routine_due = get_option( $routine_name, null );
 $block = function () use ( &$calls ) { $calls++; return new WP_Error( 'fixture_blocked', 'Simulated loopback block' ); }; add_filter( 'pre_http_request', $block );
 function wake_check( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 try {
@@ -15,8 +16,10 @@ try {
  wake_check( 403 === $request( $data, str_repeat( '0', 64 ) )->get_status(), 'Unsigned or altered requests cannot wake the site' );
  foreach ( array( array_merge( $data, array( 'issued_at' => time() - 121 ) ), array_merge( $data, array( 'generation' => $state['generation'] + 1 ) ), array_merge( $data, array( 'site_id' => wp_generate_uuid4() ) ) ) as $invalid ) { wake_check( 403 === $request( $invalid )->get_status(), 'Expired or differently scoped request denied' ); }
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) ); wp_schedule_single_event( time() + 300, 'sunrise_check_in', array( $owner ) );
+ update_option( $routine_name, time() + 300, false );
  $result = $request( $data ); wake_check( 202 === $result->get_status(), 'Signed request accepted without a WordPress login' );
  wake_check( wp_next_scheduled( 'sunrise_check_in', array( $owner ) ) <= time(), 'Future check-in becomes due immediately' );
+ wake_check( false === get_option( $routine_name ), 'Signed wake cannot count as a routine check-in' );
  wake_check( false === $result->get_data()['cron_spawned'] && 1 === $calls, 'Blocked loopback is exposed without executing any outbound request' );
  $next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) ); wake_check( 202 === $request( $data )->get_status() && $next === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ) && 1 === $calls, 'Replay acknowledges the original request without repeating work' );
  wake_check( 429 === $request( array_merge( $data, array( 'request_id' => wp_generate_uuid4() ) ) )->get_status(), 'New requests are rate-limited' );
@@ -24,6 +27,7 @@ try {
 } finally {
  wp_set_current_user( $owner ); remove_filter( 'pre_http_request', $block ); update_option( 'sunrise_agents', $states, false ); update_option( 'cron', $cron );
  if ( null === $last ) { delete_option( $name ); } else { update_option( $name, $last, false ); }
+ if ( null === $routine_due ) { delete_option( $routine_name ); } else { update_option( $routine_name, $routine_due, false ); }
  if ( false === $cron_lock ) { delete_transient( 'doing_cron' ); } else { set_transient( 'doing_cron', $cron_lock ); }
 }
 WP_CLI::success( 'Authenticated wake route checks passed.' );

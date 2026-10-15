@@ -52,6 +52,7 @@ function agent_wake( $request ) {
     return new \WP_Error( 'sunrise_wake_schedule', 'Could not schedule check-in.', array( 'status' => 500 ) );
    }
   }
+  delete_option( 'sunrise_routine_check_in_' . (int) $state['user_id'] );
   if ( ! update_option( $name, array( 'request_id' => $data['request_id'], 'issued_at' => $data['issued_at'], 'received_at' => time(), 'cron_spawned' => false ), false ) ) { return new \WP_Error( 'sunrise_wake_storage', 'Could not retain wake request.', array( 'status' => 500 ) ); }
  } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
  // Explicitly start the due event, even when page-triggered WP-Cron is disabled by the host.

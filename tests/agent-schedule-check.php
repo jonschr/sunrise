@@ -2,6 +2,7 @@
 /** wp --user=1 eval-file tests/agent-schedule-check.php on an enrolled disposable site. No HTTP. */
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() || ! current_user_can( 'manage_options' ) ) { WP_CLI::error( 'Disposable local administrator required.' ); }
 $cron = get_option( 'cron' ); $interval = get_option( 'sunrise_agent_interval', null ); $states = Sunrise\agent_states(); $owner = get_current_user_id();
+$routine_name = 'sunrise_routine_check_in_' . $owner; $routine_due = get_option( $routine_name, null );
 function sunrise_schedule_assert( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $block = function () { throw new RuntimeException( 'Scheduling must not contact any service' ); };add_filter( 'pre_http_request', $block );
 try {
@@ -19,6 +20,7 @@ try {
  wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) );update_option( 'sunrise_agent_interval', Sunrise\AGENT_INTERVAL );Sunrise\agent_migrate_schedule();$next = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );sunrise_schedule_assert( $next >= time() + HOUR_IN_SECONDS - 2 && $next <= time() + HOUR_IN_SECONDS + 30, 'Routine init restores a missing owner event at one hour plus jitter' );
 } finally {
  remove_filter( 'pre_http_request', $block );update_option( 'cron', $cron );
+ if ( null === $routine_due ) { delete_option( $routine_name ); } else { update_option( $routine_name, $routine_due, false ); }
  if ( null === $interval ) { delete_option( 'sunrise_agent_interval' ); } else { update_option( 'sunrise_agent_interval', $interval, true ); }
 }
 WP_CLI::success( 'Schedule upgrade checks passed.' );

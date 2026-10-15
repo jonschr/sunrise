@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.17 — 2026-10-14
+
+- Classify normal scheduled and overdue traffic check-ins separately from manual checks, signed wakes, setup, early continuations, and immediate follow-up reports.
+- Negotiate cadence reporting with Control, retain classification across exact-report retries, and report the configured interval without changing the hourly schedule.
+- Add intercepted regression checks for routine reports, bonus work, follow-ups, retries and traffic fallback.
+
 ## 0.3.16 — 2026-10-14
 
 - Load WP Migrate’s normal update provider during background inventory, provider refreshes, and plugin installation checks. This fixes installed/target versions appearing in wp-admin but missing from cron reports. Keep provider license and download details on the WordPress site.

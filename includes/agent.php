@@ -263,7 +263,13 @@ function agent_enroll_locked( $intent = null ) {
 
 function agent_schedule( $delay, $user_id = null ) {
 	$args = array( null === $user_id ? get_current_user_id() : (int) $user_id );
-	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) { wp_schedule_single_event( time() + max( 30, $delay ) + wp_rand( 0, 30 ), 'sunrise_check_in', $args ); }
+	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) {
+		$at = time() + max( 30, $delay ) + wp_rand( 0, 30 );
+		if ( wp_schedule_single_event( $at, 'sunrise_check_in', $args ) ) {
+			$name = 'sunrise_routine_check_in_' . $args[0];
+			if ( $delay >= AGENT_INTERVAL ) { update_option( $name, $at, false ); } else { delete_option( $name ); }
+		}
+	}
 }
 
 /** Bounded, non-secret operational history for support copy/paste. */
@@ -346,7 +352,9 @@ function agent_maybe_request_check_in() {
 			if ( get_transient( $key ) ) { agent_log( 'traffic_check_in_deferred', array( 'mode' => $recovery ? 'recovery' : 'overdue', 'reason' => 'check_in_interval_throttle' ) ); continue; }
 			set_transient( $key, time(), AGENT_INTERVAL );
 			agent_log( 'traffic_check_in_started', array( 'mode' => $recovery ? 'recovery' : 'overdue' ) );
-			$result = agent_check_in();
+			// A due cron event after the traffic fallback is a bonus report, not another routine check.
+			delete_option( 'sunrise_routine_check_in_' . (int) $user_id );
+			$result = agent_check_in( ! $recovery );
 			$errors = get_option( 'sunrise_reconnect_errors', array() );
 			if ( is_wp_error( $result ) ) {
 				agent_log( 'traffic_check_in_failed', array_merge( array( 'mode' => $recovery ? 'recovery' : 'overdue' ), agent_error_details( $result ) ) );
@@ -565,7 +573,7 @@ function agent_site_profile() {
 	return $profile;
 }
 
-function agent_check_in() {
+function agent_check_in( $routine = false ) {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'A check-in is already running.' ); }
 	$previous = get_current_user_id();
@@ -593,6 +601,10 @@ function agent_check_in() {
 				plugin_update_check();
 				$state['pending_report'] = array( 'protocol_version' => 1, 'sequence' => $state['sequence'] + 1,
 					'inventory' => agent_inventory(), 'local_pause' => ! empty( $state['paused'] ) );
+				if ( ! empty( $state['check_in_cadence'] ) ) {
+					$state['pending_report']['routine_check_in'] = (bool) $routine;
+					$state['pending_report']['check_in_interval_seconds'] = AGENT_INTERVAL;
+				}
 				if ( ! empty( $state['update_failures'] ) ) {
 					$failures = automatic_update_failures( $state['pending_report']['inventory'] );
 					if ( hash( 'sha256', wp_json_encode( $failures ) ) !== ( isset( $state['update_failure_hash'] ) ? $state['update_failure_hash'] : '' ) ) { $state['pending_report']['automatic_update_failures'] = $failures; }
@@ -640,6 +652,7 @@ function agent_check_in() {
 		$state['applied'] = $applied;
 		$state['sequence'] = $response['receipt_sequence'];
 		$state['last_success'] = time();
+		$state['check_in_cadence'] = ! empty( $response['check_in_cadence'] );
 		$state['wake_requests'] = isset( $response['wake_requests'] ) && true === $response['wake_requests'];
 		if ( isset( $state['pending_report']['wake_key'] ) && $state['wake_requests'] ) { $state['wake_registered'] = true; }
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
@@ -693,6 +706,7 @@ function agent_disconnect_locked() {
 	$states = agent_states(); unset( $states[ get_current_user_id() ] );
 	if ( ! agent_store_states( $states ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not remove connection.' ); }
 	wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) );
+	delete_option( 'sunrise_routine_check_in_' . get_current_user_id() );
 	return array( 'disconnected' => true );
 }
 
@@ -719,10 +733,10 @@ function agent_reauthenticate() {
 }
 
 /** Internal background work runs as the enrolled owner after validating their capabilities. */
-function agent_synchronize() {
+function agent_synchronize( $routine = false ) {
 	$state = agent_state();
 	$generation = isset( $state['applied']['generation'] ) ? $state['applied']['generation'] : 0;
-	$result = agent_check_in();
+	$result = agent_check_in( $routine );
 	if ( ! is_wp_error( $result ) && ! empty( $result['license_refreshed'] ) ) { wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); agent_schedule( 60 ); return $result; }
 	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in(); }
 	if ( ! is_wp_error( $result ) && ( ! empty( $result['work_available'] ) || ! empty( agent_state()['remote_job'] ) ) ) {
@@ -750,9 +764,13 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 	if ( ! isset( $states[ $user_id ] ) || ! agent_owner_valid( $states[ $user_id ] ) || ! empty( $states[ $user_id ]['revoked'] ) ) { return; }
 	try {
 		wp_set_current_user( $user_id );
+		$name = 'sunrise_routine_check_in_' . (int) $user_id;
+		$due = (int) get_option( $name, 0 );
+		$routine = $due > 0 && $due <= time();
+		delete_option( $name );
 		// WP-Cron removes a single event before invoking it; reserve its successor before work that may stop the request.
 		agent_schedule( AGENT_INTERVAL );
-		$result = agent_synchronize();
+		$result = agent_synchronize( $routine );
 		agent_log( is_wp_error( $result ) ? 'scheduled_check_in_failed' : 'scheduled_check_in_succeeded', is_wp_error( $result ) ? agent_error_details( $result ) : array() );
 		$delay = AGENT_INTERVAL;
 		if ( is_wp_error( $result ) ) {
