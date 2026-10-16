@@ -2,6 +2,7 @@
 namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
+require_once __DIR__ . '/error-context.php';
 
 /** Default-on fatal diagnostics. Never replace error handlers or send HTTP during shutdown. */
 /** An explicit opt-out survives upgrades; unconnected installations do not collect. */
@@ -60,30 +61,40 @@ function error_diagnostics( $error ) {
 	$message = preg_replace( '~(?<![\w/])(?:[A-Z]:[\\\\/]|/)[^\s<>"\x27]+~i', '[path]', $message );
 	$message = preg_replace( '/[\x00-\x1f\x7f]/', ' ', $message );
 	$message = wp_check_invalid_utf8( substr( trim( $message ), 0, 2000 ), true );
-	$source = isset( $error['trace'] ) && is_array( $error['trace'] ) ? array_slice( $error['trace'], 0, 12 ) : array();
+	$source = isset( $error['trace'] ) && is_array( $error['trace'] ) ? array_slice( $error['trace'], 0, 33 ) : array();
+	$truncated = ( isset( $error['trace'] ) && is_array( $error['trace'] ) && count( $error['trace'] ) > 32 ) || ( isset( $error['message'] ) && is_string( $error['message'] ) && strlen( $error['message'] ) > 65536 );
 	if ( ! $source && preg_match_all( '/^#\d+\s+(.+?)\((\d+)\):\s+([^\r\n(]*)\(/m', $raw, $matches, PREG_SET_ORDER ) ) {
-		foreach ( array_slice( $matches, 0, 12 ) as $match ) { $source[] = array( 'file' => $match[1], 'line' => (int) $match[2], 'function' => trim( $match[3] ) ); }
+		$truncated = $truncated || count( $matches ) > 32;
+		foreach ( array_slice( $matches, 0, 32 ) as $match ) { $source[] = array( 'file' => $match[1], 'line' => (int) $match[2], 'function' => trim( $match[3] ) ); }
 	}
 	$trace = array();
-	foreach ( $source as $frame ) {
+	foreach ( array_slice( $source, 0, 32 ) as $frame ) {
 		if ( ! is_array( $frame ) ) { continue; }
 		$function = ( isset( $frame['class'] ) && is_string( $frame['class'] ) ? $frame['class'] . ( ( $frame['type'] ?? null ) === '->' ? '->' : '::' ) : '' ) . ( isset( $frame['function'] ) && is_string( $frame['function'] ) ? $frame['function'] : '{unknown}' );
 		if ( strlen( $function ) > 200 || ! preg_match( '/^[A-Za-z0-9_\\\\:{}>\-]+$/D', $function ) ) { $function = '{unknown}'; }
 		$trace[] = array( 'file' => error_location( $frame['file'] ?? null ), 'line' => isset( $frame['line'] ) && is_int( $frame['line'] ) ? max( 0, min( 10000000, $frame['line'] ) ) : 0, 'function' => $function );
 	}
-	return array( 'message' => $message, 'stack_trace' => $trace );
+	return array( 'message' => $message, 'stack_trace' => $trace, 'trace_truncated' => $truncated );
 }
 
 function error_summaries() {
 	$groups = get_option( 'sunrise_error_groups', array() ); $valid = array();
 	foreach ( is_array( $groups ) ? array_slice( $groups, 0, 100, true ) : array() as $key => $group ) {
-		if ( ! is_array( $group ) || array_diff( array_keys( $group ), array( 'id', 'code', 'file', 'line', 'count', 'first_at', 'last_at', 'details' ) ) || ! isset( $group['id'], $group['code'], $group['file'], $group['line'], $group['count'], $group['first_at'], $group['last_at'] ) ) { continue; }
+		if ( ! is_array( $group ) || array_diff( array_keys( $group ), array( 'id', 'code', 'file', 'line', 'count', 'first_at', 'last_at', 'details', 'occurrences' ) ) || ! isset( $group['id'], $group['code'], $group['file'], $group['line'], $group['count'], $group['first_at'], $group['last_at'] ) ) { continue; }
 		if ( ! is_string( $group['id'] ) || ! wp_is_uuid( $group['id'], 4 ) || ! is_string( $group['file'] ) || ! is_int( $group['last_at'] ) || ! is_int( $group['first_at'] ) || $group['first_at'] > $group['last_at'] || $group['first_at'] < time() - 3 * DAY_IN_SECONDS || $group['last_at'] > time() + 300 ) { continue; }
 		if ( ! in_array( $group['code'], array( 'fatal', 'parse', 'core', 'compile', 'user_fatal', 'recoverable' ), true ) || ! is_int( $group['line'] ) || $group['line'] < 0 || $group['line'] > 10000000 || ! is_int( $group['count'] ) || $group['count'] < 1 || $group['count'] > 1000000 ) { continue; }
 		if ( strlen( $group['file'] ) > 240 || ! preg_match( '#^(wordpress|plugins|themes|mu-plugins|content|outside)/[A-Za-z0-9_./-]+$#D', $group['file'] ) || false !== strpos( $group['file'], '..' ) || false !== strpos( $group['file'], '//' ) ) { continue; }
-		if ( array_key_exists( 'details', $group ) && ( ! is_array( $group['details'] ) || count( $group['details'] ) !== 2 || ! isset( $group['details']['message'], $group['details']['stack_trace'] ) || ! is_string( $group['details']['message'] ) || strlen( $group['details']['message'] ) > 2000 || ! is_array( $group['details']['stack_trace'] ) || count( $group['details']['stack_trace'] ) > 12 ) ) { continue; }
+		if ( array_key_exists( 'details', $group ) && ( ! is_array( $group['details'] ) || array_diff( array_keys( $group['details'] ), array( 'message', 'stack_trace', 'trace_truncated' ) ) || ! isset( $group['details']['message'], $group['details']['stack_trace'] ) || ! is_string( $group['details']['message'] ) || strlen( $group['details']['message'] ) > 2000 || ! is_array( $group['details']['stack_trace'] ) || count( $group['details']['stack_trace'] ) > 32 || ( isset( $group['details']['trace_truncated'] ) && ! is_bool( $group['details']['trace_truncated'] ) ) ) ) { continue; }
 		foreach ( $group['details']['stack_trace'] ?? array() as $frame ) {
 			if ( ! is_array( $frame ) || count( $frame ) !== 3 || ! isset( $frame['file'], $frame['line'], $frame['function'] ) || ! is_string( $frame['file'] ) || strlen( $frame['file'] ) > 240 || ! preg_match( '#^(wordpress|plugins|themes|mu-plugins|content|outside)/[A-Za-z0-9_./-]+$#D', $frame['file'] ) || false !== strpos( $frame['file'], '..' ) || false !== strpos( $frame['file'], '//' ) || ! is_int( $frame['line'] ) || $frame['line'] < 0 || $frame['line'] > 10000000 || ! is_string( $frame['function'] ) || strlen( $frame['function'] ) > 200 || ! preg_match( '/^[A-Za-z0-9_\\\\:{}>\-]+$/D', $frame['function'] ) ) { continue 2; }
+		}
+		if ( isset( $group['occurrences'] ) ) {
+			if ( ! is_array( $group['occurrences'] ) || count( $group['occurrences'] ) > 3 ) { continue; }
+			$previous_at = 0;
+			foreach ( $group['occurrences'] as $occurrence ) {
+				if ( ! is_array( $occurrence ) || count( $occurrence ) !== 2 || ! isset( $occurrence['captured_at'], $occurrence['context'] ) || ! is_int( $occurrence['captured_at'] ) || $occurrence['captured_at'] < $group['first_at'] || $occurrence['captured_at'] > $group['last_at'] || $occurrence['captured_at'] <= $previous_at || ! error_context_valid( $occurrence['context'] ) ) { continue 2; }
+				$previous_at = $occurrence['captured_at'];
+			}
 		}
 		$valid[ $key ] = $group;
 	}
@@ -111,6 +122,14 @@ function capture_error_summary( $error ) {
 	if ( ! isset( $groups[ $key ] ) ) { $groups[ $key ] = array( 'id' => wp_generate_uuid4(), 'code' => $code, 'file' => $file, 'line' => $line, 'count' => 0, 'first_at' => $now ); }
 	$groups[ $key ]['count'] = min( 1000000, $groups[ $key ]['count'] + 1 ); $groups[ $key ]['last_at'] = $now;
 	$groups[ $key ]['details'] = error_diagnostics( $error );
+	try {
+		$context = error_context();
+		if ( error_context_valid( $context ) ) {
+			$occurrences = array_values( array_filter( $groups[ $key ]['occurrences'] ?? array(), function ( $occurrence ) use ( $now ) { return $occurrence['captured_at'] < $now; } ) );
+			$occurrences[] = array( 'captured_at' => $now, 'context' => $context );
+			$groups[ $key ]['occurrences'] = array_slice( $occurrences, -3 );
+		}
+	} catch ( \Throwable $failure ) { /* Keep the baseline report if context collection fails. */ }
 	uasort( $groups, function ( $a, $b ) { return $b['last_at'] <=> $a['last_at']; } );
 	update_option( 'sunrise_error_groups', array_slice( $groups, 0, 100, true ), false );
 }
@@ -131,11 +150,27 @@ function agent_report_errors() {
 	$groups = array_values( error_summaries() );
 	if ( ! error_reporting_enabled( $state ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { return true; }
 	if ( ! $groups ) { return true; }
-	if ( empty( $state['error_details_supported'] ) ) { foreach ( $groups as &$group ) { unset( $group['details'] ); } unset( $group ); }
+	foreach ( $groups as &$group ) {
+		if ( empty( $state['error_context_supported'] ) ) {
+			unset( $group['occurrences'] );
+			if ( isset( $group['details'] ) ) { unset( $group['details']['trace_truncated'] ); $group['details']['stack_trace'] = array_slice( $group['details']['stack_trace'], 0, 12 ); }
+		}
+		if ( empty( $state['error_details_supported'] ) ) { unset( $group['details'] ); }
+	} unset( $group );
 	$hash = hash( 'sha256', wp_json_encode( array( $state['site_id'], $groups ) ) );
 	$key = 'sunrise_error_ack_' . get_current_user_id();
 	if ( get_option( $key ) === $hash ) { return true; }
-	$result = agent_http( 'agent/errors', array( 'groups' => $groups ), $state );
-	if ( ! is_wp_error( $result ) && isset( $result['accepted'] ) && true === $result['accepted'] ) { update_option( $key, $hash, false ); return true; }
-	return is_wp_error( $result ) ? $result : new \WP_Error( 'sunrise_errors_receipt', 'Invalid diagnostic receipt.' );
+	// Bound delivery independently of the 100-group local retention limit.
+	$batches = array(); $batch = array(); $bytes = 0;
+	foreach ( $groups as $group ) {
+		$size = strlen( wp_json_encode( $group ) ) + 1;
+		if ( $batch && $bytes + $size > 524288 ) { $batches[] = $batch; $batch = array(); $bytes = 0; }
+		$batch[] = $group; $bytes += $size;
+	}
+	if ( $batch ) { $batches[] = $batch; }
+	foreach ( $batches as $batch ) {
+		$result = agent_http( 'agent/errors', array( 'groups' => $batch ), $state );
+		if ( is_wp_error( $result ) || ! isset( $result['accepted'] ) || true !== $result['accepted'] ) { return is_wp_error( $result ) ? $result : new \WP_Error( 'sunrise_errors_receipt', 'Invalid diagnostic receipt.' ); }
+	}
+	update_option( $key, $hash, false ); return true;
 }

@@ -4,8 +4,8 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! 
 $states = Sunrise\agent_states(); $saved = array();
 foreach ( array( 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_error_ack_' . get_current_user_id() ) as $key ) { $saved[ $key ] = get_option( $key, null ); delete_option( $key ); }
 function sunrise_errors_assert( $condition, $label ) { if ( ! $condition ) { throw new RuntimeException( $label ); } WP_CLI::line( 'PASS: ' . $label ); }
-$requests = array();$success = false;
-$transport = function ( $pre, $args ) use ( &$requests, &$success ) { $requests[] = json_decode( $args['body'], true ); return $success ? array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => '{"accepted":true}' ) : new WP_Error( 'offline', 'Fixture outage' ); };
+$requests = array();$success = false;$fail_at = null;
+$transport = function ( $pre, $args ) use ( &$requests, &$success, &$fail_at ) { $requests[] = json_decode( $args['body'], true ); return $success && count($requests)!==$fail_at ? array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => '{"accepted":true}' ) : new WP_Error( 'offline', 'Fixture outage' ); };
 try {
  $state = Sunrise\agent_state();unset( $state['errors_enabled'] );Sunrise\agent_store( $state );sunrise_errors_assert( Sunrise\error_capture_enabled(), 'Connected sites capture by default without a per-site opt-in' );
  sunrise_errors_assert( ! Sunrise\error_reporting_enabled( array() ), 'Unconnected sites do not capture' );
@@ -17,6 +17,9 @@ try {
  sunrise_errors_assert( 1 === count( $groups ) && false === strpos( wp_json_encode( $groups ), 'fixture-secret' ) && false === strpos( wp_json_encode( $groups ), 'private@example.invalid' ) && false === strpos( wp_json_encode( $groups ), 'SQL' ) && false === strpos( wp_json_encode( $groups ), ABSPATH ), 'Bounded diagnostics redact credentials, email, queries, and absolute paths' );
  Sunrise\capture_error_summary( $error );sunrise_errors_assert( 1 === array_values( Sunrise\error_summaries() )[0]['count'], 'Error storms are sampled at most once per ten seconds' );
  delete_option( 'sunrise_error_capture_lock' );Sunrise\capture_error_summary( $error );sunrise_errors_assert( 2 === array_values( Sunrise\error_summaries() )[0]['count'], 'A later captured occurrence increments the same stable group' );
+ $groups = Sunrise\error_summaries();$key = array_key_first( $groups );$context = Sunrise\error_context();$now = time();$groups[$key]['first_at'] = $now - 60;$groups[$key]['last_at'] = $now - 20;$groups[$key]['occurrences'] = array();
+ foreach(array(40,30,20) as $ago){$groups[$key]['occurrences'][] = array('captured_at'=>$now-$ago,'context'=>$context);}update_option('sunrise_error_groups',$groups,false);delete_option('sunrise_error_capture_lock');Sunrise\capture_error_summary($error);
+ $recent_occurrences = array_values(Sunrise\error_summaries())[0]['occurrences'];sunrise_errors_assert(3===count($recent_occurrences) && $now-30===$recent_occurrences[0]['captured_at'] && $now===$recent_occurrences[2]['captured_at'],'Only the latest three sampled contexts are retained');
  foreach ( array( '/private/secrets.php', WP_CONTENT_DIR . '/uploads/private-file.php', WP_PLUGIN_DIR . '/example/eval.php(1) : eval() code', WP_PLUGIN_DIR . '/../wp-config.php' ) as $path ) { sunrise_errors_assert( 'outside/unknown' === Sunrise\error_location( $path ), 'Unsupported or sensitive locations are suppressed' ); }
  for ( $i = 0; $i < 105; $i++ ) { delete_option( 'sunrise_error_capture_lock' );Sunrise\capture_error_summary( array_merge( $error, array( 'line' => $i + 100 ) ) ); }
  sunrise_errors_assert( 100 === count( Sunrise\error_summaries() ), 'The local group cap holds during a storm' );
@@ -27,7 +30,10 @@ try {
  $success = true;sunrise_errors_assert( true === Sunrise\agent_report_errors() && $requests[0] === $requests[1], 'Retry delivers the same cumulative groups' );
  Sunrise\agent_report_errors();sunrise_errors_assert( 2 === count( $requests ) && ! isset( $requests[1]['groups'][0]['details'] ), 'Older services receive only supported fields without extra requests' );
  $state = Sunrise\agent_state();$state['error_details_supported'] = true;Sunrise\agent_store( $state );Sunrise\agent_report_errors();sunrise_errors_assert( 3 === count( $requests ) && isset( $requests[2]['groups'][0]['details']['message'] ), 'Negotiation delivers newly supported diagnostics even after a legacy acknowledgment' );
- Sunrise\error_capture_setting( false );Sunrise\agent_report_errors();sunrise_errors_assert( 3 === count( $requests ), 'Disabling the connection stops its uploads' );
+ $state = Sunrise\agent_state();$state['error_context_supported'] = true;Sunrise\agent_store($state);Sunrise\agent_report_errors();sunrise_errors_assert(4===count($requests) && isset($requests[3]['groups'][0]['occurrences'],$requests[3]['groups'][0]['details']['trace_truncated']),'New context is negotiated independently of message/trace support');
+ $large=Sunrise\error_summaries();foreach($large as &$entry){$entry['details']['message']=str_repeat('a',2000);$entry['details']['stack_trace']=array_fill(0,32,array('function'=>str_repeat('a',200),'file'=>'plugins/fixture/'.str_repeat('b',180).'.php','line'=>1));}unset($entry);update_option('sunrise_error_groups',$large,false);
+ $before=count($requests);$ack=get_option('sunrise_error_ack_' . get_current_user_id());$fail_at=$before+2;sunrise_errors_assert(is_wp_error(Sunrise\agent_report_errors()) && $ack===get_option('sunrise_error_ack_' . get_current_user_id()),'Partial batch failure must not acknowledge the report');$fail_at=null;$before=count($requests);Sunrise\agent_report_errors();$batches=array_slice($requests,$before);sunrise_errors_assert(count($batches)>1 && 100===array_sum(array_map(function($batch){return count($batch['groups']);},$batches)),'Large reports are delivered in bounded batches');foreach($batches as $batch){sunrise_errors_assert(strlen(wp_json_encode($batch))<=524300,'Each diagnostic request stays below the delivery budget');}
+ $before=count($requests);Sunrise\error_capture_setting( false );Sunrise\agent_report_errors();sunrise_errors_assert( $before === count( $requests ), 'Disabling the connection stops its uploads' );
 } finally {
  remove_filter( 'pre_http_request', $transport );update_option( 'sunrise_agents', $states, false );
  foreach ( $saved as $key => $value ) { if ( null === $value ) { delete_option( $key ); } else { update_option( $key, $value, false ); } }

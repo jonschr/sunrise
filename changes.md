@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.24 — 2026-10-15
+
+- Capture bounded request type, sanitized path/method, current and queried post IDs, template, active hooks, current dynamic block/renderer and relevant registered hook callbacks at fatal errors. Exclude request bodies, query strings, cookies, arguments and absolute paths; redact sensitive path segments.
+- Retain the last three sampled occurrence contexts per error group and up to 32 argument-free trace frames with an explicit truncation indicator. Keep existing sampling, opt-out and three-day retention.
+- Negotiate context support independently; older services receive the existing location/message/12-frame shape. Deliver larger reports in bounded batches and acknowledge only after every batch succeeds.
+
 ## 0.3.23 — 2026-10-15
 
 - Report the site’s PHP version after Control negotiates support, with a bounded follow-up for the first report.

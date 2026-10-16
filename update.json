@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.23",
+  "version": "0.3.24",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.23/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.24/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Report site PHP versions and distinguish update compatibility, package/provider, transport, filesystem, disk-space, rollback and PHP runtime failures."
+    "changelog": "Capture sanitized request, content, hook and block context for fatal errors, retain three recent contexts, and explicitly identify truncated traces with backward-compatible delivery."
   }
 }

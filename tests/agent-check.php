@@ -20,7 +20,7 @@ $mock_wire['hash'] = hash( 'sha256', $mock_wire['document_json'] );
 $reply = function ( $pre, $args, $url ) use ( &$reports, $mock_wire ) {
 	if ( '/agent/check-in' !== substr( $url, -15 ) ) { return new WP_Error( 'fixture_offline', 'Non-Control requests blocked' ); }
 	$report = json_decode( $args['body'], true ); $reports[] = $report;
-	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'sunrise_latest_version' => Sunrise\VERSION, 'site_profiles' => true, 'php_versions' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'sunrise_latest_version' => Sunrise\VERSION, 'site_profiles' => true, 'php_versions' => true, 'error_reports' => true, 'error_details' => true, 'error_context' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 };
 try {
 	$loaded_wp_version = $GLOBALS['wp_version'];
@@ -57,6 +57,7 @@ try {
 	$next = wp_next_scheduled( 'sunrise_check_in', array( $original_user ) );
 	sunrise_agent_assert( $next >= $now + HOUR_IN_SECONDS && $next <= time() + HOUR_IN_SECONDS + 30, 'Cron schedules the next outbound report in one hour with jitter' );
 	sunrise_agent_assert( 2 === count( $reports ) && $mock_wire['generation'] === $reports[1]['policy_ack']['generation'], 'A new policy is acknowledged immediately in the same sync' );
+	sunrise_agent_assert( Sunrise\agent_state()['error_context_supported'], 'Trigger context capability is negotiated during check-in' );
 	sunrise_agent_assert( ! isset( $reports[0]['php_version'] ) && PHP_VERSION === $reports[1]['php_version'], 'PHP version is negotiated before reporting and includes the actual runtime version' );
 	sunrise_agent_assert( ! isset( $reports[0]['site_profile'] ) && Sunrise\agent_site_profile() === $reports[1]['site_profile'], 'Profiles are negotiated first and delivered in the bounded follow-up' );
 	sunrise_agent_assert( ! isset( $reports[0]['wake_key'] ) && Sunrise\agent_wake_key( $state ) === $reports[1]['wake_key'], 'Wake-only authentication is negotiated and registered' );
@@ -88,7 +89,7 @@ try {
 		if ( false === strpos( $url, '/v1/agent/check-in' ) ) { return $pre; }
 		$report = json_decode( $args['body'], true ); $sequence_reports[] = $report;
 		if ( 1 === count( $sequence_reports ) ) { return array( 'response' => array( 'code' => 409 ), 'headers' => array(), 'body' => wp_json_encode( array( 'error' => array( 'code' => 'sequence_conflict', 'server_sequence' => $server_sequence ) ) ) ); }
-		return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'php_versions' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
+		return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $report['sequence'], 'policy' => $mock_wire, 'site_profiles' => true, 'php_versions' => true, 'error_reports' => true, 'error_details' => true, 'error_context' => true, 'wake_requests' => true, 'update_failures' => true, 'failure_checks' => array() ) ) );
 	};
 	add_filter( 'pre_http_request', $sequence_reply, 10, 3 );
 	try { $result = Sunrise\agent_check_in(); } finally { remove_filter( 'pre_http_request', $sequence_reply ); }

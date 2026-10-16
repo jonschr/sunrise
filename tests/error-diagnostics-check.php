@@ -33,7 +33,10 @@ check( 'plugins/example/main.php' === $details['stack_trace'][0]['file'], 'Trace
 check( false === strpos( json_encode( $details ), 'trace-secret-value' ) && false === strpos( json_encode( $details ), WP_PLUGIN_DIR ), 'String trace leaked arguments or paths.' );
 $error['trace'] = array_fill( 0, 20, array( 'file' => $file, 'line' => 99, 'class' => 'Example', 'type' => '->', 'function' => 'run', 'args' => array( 'trace-secret-value' ), 'object' => new \stdClass() ) );
 $details = \Sunrise\error_diagnostics( $error );
-check( 12 === count( $details['stack_trace'] ) && 3 === count( $details['stack_trace'][0] ), 'Structured traces must be bounded and exclude arguments/objects.' );
+check( 20 === count( $details['stack_trace'] ) && ! $details['trace_truncated'] && 3 === count( $details['stack_trace'][0] ), 'Structured traces must be bounded and exclude arguments/objects.' );
+$error['trace'] = array_fill( 0, 40, $error['trace'][0] );
+$details = \Sunrise\error_diagnostics( $error );
+check( 32 === count( $details['stack_trace'] ) && $details['trace_truncated'], 'Truncation must be explicit.' );
 $details = \Sunrise\error_diagnostics( array( 'file' => $file, 'message' => 'password=fixture-secret email=private@example.invalid URL=https://private.example/path SQL SELECT private FROM users' ) );
 foreach ( array( 'fixture-secret', 'private@example.invalid', 'private.example', 'SELECT private', 'SQL' ) as $secret ) { check( false === strpos( $details['message'], $secret ), 'Sensitive diagnostic content survived redaction.' ); }
 $details = \Sunrise\error_diagnostics( array( 'message' => str_repeat( 'a', 5000 ) ) );
