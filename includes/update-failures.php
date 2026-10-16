@@ -72,7 +72,11 @@ function failure_installed_versions( $inventory ) {
 	return $versions;
 }
 function automatic_update_failures( $inventory, $specific = true ) {
-	$failures = get_option( 'sunrise_automatic_update_failures', array() ); $versions = failure_installed_versions( $inventory ); $remaining = $failures;
+	$failures = get_option( 'sunrise_hourly_update_attempts', array() );
+	foreach ( get_option( 'sunrise_automatic_update_failures', array() ) as $key => $failure ) {
+		if ( ! isset( $failures[ $key ] ) || version_compare( $failure['version'], $failures[ $key ]['version'], '>=' ) ) { $failures[ $key ] = $failure; }
+	}
+	$versions = failure_installed_versions( $inventory ); $remaining = $failures;
 	foreach ( $remaining as $key => $failure ) {
 		if ( isset( $versions[ $key ] ) && version_compare( $versions[ $key ], $failure['version'], '>=' ) ) { unset( $remaining[ $key ] ); }
 	}
@@ -81,7 +85,8 @@ function automatic_update_failures( $inventory, $specific = true ) {
 		foreach ( $remaining as &$failure ) { if ( isset( $legacy[ $failure['code'] ] ) ) { $failure['code'] = $legacy[ $failure['code'] ]; } } unset( $failure );
 	}
 	// Filter the report without overwriting a failure captured by a concurrent automatic updater.
-	return array_values( $remaining );
+	usort( $remaining, function ( $a, $b ) { return $b['failed_at'] - $a['failed_at']; } );
+	return array_slice( $remaining, 0, 100 );
 }
 function failure_resolutions( $checks, $inventory ) {
 	$versions = failure_installed_versions( $inventory ); $resolved = array();

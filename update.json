@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.24",
+  "version": "0.3.25",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.24/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.25/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Capture sanitized request, content, hook and block context for fatal errors, retain three recent contexts, and explicitly identify truncated traces with backward-compatible delivery."
+    "changelog": "Run one guarded native automatic-update pass per hour after policy synchronization. Skip failed or unconfirmed versions only during this extra pass; retain normal WordPress retries and report completed updates immediately."
   }
 }

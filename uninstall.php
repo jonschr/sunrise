@@ -24,6 +24,6 @@ foreach ( array( 'sunrise_job_', 'sunrise_routine_check_in_', 'sunrise_connectio
 		delete_option( $name );
 	}
 }
-foreach ( array( 'sunrise_agent_interval', 'sunrise_agent_log', 'sunrise_agent_log_version', 'sunrise_automatic_update_failures', 'sunrise_automatic_update_activity', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_reconnect_errors', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock', 'sunrise_migration_pairs', 'sunrise_database_active', 'sunrise_database_last', 'sunrise_migrations_retired_0310', 'sunrise_control_reauth_required' ) as $name ) {
+foreach ( array( 'sunrise_agent_interval', 'sunrise_agent_log', 'sunrise_agent_log_version', 'sunrise_hourly_update_at', 'sunrise_hourly_update_attempts', 'sunrise_automatic_update_failures', 'sunrise_automatic_update_activity', 'sunrise_error_groups', 'sunrise_error_capture_lock', 'sunrise_installation', 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_reconnect_errors', 'sunrise_agent.lock', 'sunrise_policy', 'sunrise_last_refresh', 'sunrise_queue.lock', 'sunrise_worker.lock', 'sunrise_policy.lock', 'sunrise_migration_pairs', 'sunrise_database_active', 'sunrise_database_last', 'sunrise_migrations_retired_0310', 'sunrise_control_reauth_required' ) as $name ) {
 	delete_option( $name );
 }

@@ -781,6 +781,10 @@ function agent_synchronize( $routine = false ) {
 	$result = agent_check_in( $routine );
 	if ( ! is_wp_error( $result ) && ! empty( $result['license_refreshed'] ) ) { wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); agent_schedule( 60 ); return $result; }
 	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in(); }
+	if ( ! is_wp_error( $result ) && empty( $result['work_available'] ) && wp_doing_cron() ) {
+		require_once __DIR__ . '/hourly-updates.php';
+		if ( agent_run_hourly_updates() ) { $result = agent_check_in(); }
+	}
 	if ( ! is_wp_error( $result ) && ( ! empty( $result['work_available'] ) || ! empty( agent_state()['remote_job'] ) ) ) {
 		require_once __DIR__ . '/agent-jobs.php';
 		$job = agent_run_update_job();

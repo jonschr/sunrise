@@ -2,6 +2,12 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.25 — 2026-10-16
+
+- After successful background policy synchronization, refresh offers and run WordPress's native automatic updater at most once per hour per installation. Respect effective policies, local pause, native restrictions, queued central work and shared worker/process locks; report inventory and outcomes immediately afterward.
+- Skip failed or unconfirmed component versions only in the extra hourly pass. Preserve normal WordPress retries and explicit update actions; newer offered versions remain eligible. Retain attempt intent before installation so fatal exits cannot create hourly retry loops.
+- Verify native installation, fatal rollback, ordinary native retry, interrupted attempts, reporting retries, cooldown and worker isolation on a disposable local WordPress site with all HTTP intercepted.
+
 ## 0.3.24 — 2026-10-15
 
 - Capture bounded request type, sanitized path/method, current and queried post IDs, template, active hooks, current dynamic block/renderer and relevant registered hook callbacks at fatal errors. Exclude request bodies, query strings, cookies, arguments and absolute paths; redact sensitive path segments.

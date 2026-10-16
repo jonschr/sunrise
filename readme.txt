@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.24
+Stable tag: 0.3.25
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,7 +29,12 @@ Updates come from published GitHub releases at github.com/jonschr/sunrise. Use t
 
 == Changelog ==
 
-= 0.3.24 =
+= 0.3.25 =
+* Add a guarded hourly native automatic-update pass after background policy sync, with immediate result reporting.
+* Exclude failed/unconfirmed versions only from the extra pass; preserve normal WordPress retries.
+
+
+= 0.3.25 =
 Report site PHP versions and more specific update failure reasons, with negotiated compatibility for older Control versions.
 
 = 0.3.22 =
