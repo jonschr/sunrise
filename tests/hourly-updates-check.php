@@ -2,18 +2,29 @@
 /** wp --user=1 eval-file tests/hourly-updates-check.php on a disposable local site. All HTTP is intercepted. */
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() || ! current_user_can( 'manage_options' ) || ! defined( 'DISABLE_WP_CRON' ) || ! DISABLE_WP_CRON ) { WP_CLI::error( 'Disposable local administrator with cron disabled required.' ); }
 $names = array( 'cron', 'active_plugins', 'sunrise_agents', 'sunrise_agent', 'sunrise_installation', 'sunrise_hourly_update_at', 'sunrise_hourly_update_attempts', 'sunrise_automatic_update_failures', 'sunrise_automatic_update_activity', 'sunrise_last_refresh', 'sunrise_agent_log', 'sunrise_remote_job_fence', 'auto_plugin_theme_update_emails', 'external_updates-sunrise' );
+$names[] = 'sunrise_routine_check_in_' . get_current_user_id();
 $saved = array(); foreach ( $names as $name ) { $saved[ $name ] = get_option( $name, null ); }
 $transients = array(); foreach ( array( 'core', 'plugins', 'themes' ) as $type ) { $transients[ $type ] = get_site_transient( 'update_' . $type ); }
 $anchor_path = WP_CONTENT_DIR . '/sunrise-installation.php'; $anchor = file_exists( $anchor_path ) ? file_get_contents( $anchor_path ) : null;
-$directory = WP_PLUGIN_DIR . '/sunrise-hourly-fixture'; $id = 'sunrise-hourly-fixture/plugin.php'; $zip = null; $reports = array(); $attempts = 0; $mode = 'success'; $wire = null; $events = array(); $lose_report = false; $offline = false; $updater_status = false;
+$directory = WP_PLUGIN_DIR . '/sunrise-hourly-fixture'; $id = 'sunrise-hourly-fixture/plugin.php'; $zip = null; $reports = array(); $attempts = 0; $mode = 'success'; $wire = null; $events = array(); $lose_report = false; $offline = false; $updater_status = false; $queue_job = null; $queue_done = false; $queue_more = false; $queue_lose_ack = false; $queue_lose_sync = false; $queue_uncertain = false; $queue_after_auto = false; $queue_wire = null;
 if ( file_exists( $directory ) ) { WP_CLI::error( 'Fixture directory already exists.' ); }
 function hourly_check( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $response = static function ( $body ) { return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( $body ) ); };
-$http = function ( $pre, $args, $url ) use ( &$reports, &$attempts, &$mode, &$wire, &$events, &$lose_report, &$offline, &$updater_status, $id, $response ) {
+$http = function ( $pre, $args, $url ) use ( &$reports, &$attempts, &$mode, &$wire, &$events, &$lose_report, &$offline, &$updater_status, &$queue_job, &$queue_done, &$queue_more, &$queue_lose_ack, &$queue_lose_sync, &$queue_uncertain, &$queue_after_auto, &$queue_wire, $id, $response ) {
  if ( false !== strpos( $url, '/v1/agent/check-in' ) ) {
   $report = json_decode( $args['body'], true ); $reports[] = $report; $events[] = 'report';
-  if ( $offline || ( $lose_report && $attempts ) ) { return new WP_Error( 'fixture_offline', 'Simulated lost response' ); }
-  return $response( array_merge( $updater_status ? array( 'automatic_updater_status' => true ) : array(), array( 'receipt_sequence' => $report['sequence'], 'policy' => $wire, 'update_failures' => true, 'update_activity' => true, 'update_failure_details' => true, 'failure_checks' => array(), 'check_in_cadence' => true ) ) );
+  if ( $offline || ( $lose_report && $attempts ) || ( $queue_lose_sync && $queue_done ) ) { return new WP_Error( 'fixture_offline', 'Simulated lost response' ); }
+  return $response( array_merge( $updater_status ? array( 'automatic_updater_status' => true ) : array(), array( 'update_jobs' => true, 'work_available' => ( $queue_job && ( ! $queue_done || $queue_more ) ) || ( $queue_after_auto && $attempts > 0 ), 'receipt_sequence' => $report['sequence'], 'policy' => $queue_done && $queue_wire ? $queue_wire : $wire, 'update_failures' => true, 'update_activity' => true, 'update_failure_details' => true, 'failure_checks' => $queue_done && $queue_job && 'failed' === $queue_job['status'] ? array( array( 'id' => $queue_job['id'], 'type' => $queue_job['payload']['type'], 'installed_id' => $queue_job['payload']['installed_id'], 'version' => $queue_job['payload']['version'] ) ) : array(), 'check_in_cadence' => true ) ) );
+ }
+ if ( false !== strpos( $url, '/v1/agent/jobs/' ) ) {
+  if ( '/claim' === substr( $url, -6 ) ) { $events[] = 'job_claim'; return $response( array( 'job' => null ) ); }
+  if ( '/events' === substr( $url, -7 ) && $queue_job ) {
+   $events[] = 'job_ack';
+   if ( $queue_lose_ack ) { return new WP_Error( 'fixture_offline', 'Simulated lost job acknowledgment' ); }
+   $queue_done = true; $job = $queue_job; $job['status'] = $queue_uncertain ? 'uncertain' : $job['status'];
+   return $response( array( 'job' => $job ) );
+  }
+  return new WP_Error( 'fixture_blocked', 'Unexpected central execution' );
  }
  if ( false !== strpos( $url, 'wp_scrape_key=' ) ) {
   parse_str( wp_parse_url( $url, PHP_URL_QUERY ), $query ); $key = $query['wp_scrape_key'];
@@ -66,6 +77,45 @@ try {
  hourly_check( '2.0' === $reported[0]['version'] && 'succeeded' === $last['automatic_update_activity'][0]['status'], 'Completion immediately reports installed inventory and native success activity' );
  hourly_check( array_search( 'install', $events, true ) >= 2 && 'report' === end( $events ), 'Fresh policy and acknowledgment precede installation; the final operation reports results' );
  $count = count( $reports ); Sunrise\agent_synchronize( true ); hourly_check( 1 === $attempts && count( $reports ) === $count + 1, 'Repeated background checks share the installation-wide hourly cooldown' );
+ // An installation result waiting for acknowledgment must hand off only after Control confirms the queue is empty.
+ $complete_queue = function () use ( &$queue_job, &$queue_done, &$queue_more, &$queue_lose_ack, &$queue_lose_sync, &$queue_uncertain, &$queue_after_auto, &$queue_wire, &$state, $reset ) {
+  $reset(); $queue_done = false; $queue_more = false; $queue_lose_ack = false; $queue_lose_sync = false; $queue_uncertain = false; $queue_after_auto = false; $queue_wire = null;
+  $queue_job = array( 'id' => wp_generate_uuid4(), 'status' => 'succeeded', 'revision' => 4, 'payload' => array( 'action' => 'install_update', 'type' => 'plugin', 'installed_id' => 'completed-fixture/plugin.php', 'version' => '2.0', 'from_version' => '1.0', 'identity' => null ) );
+  $pending = $state; $pending['remote_job'] = array( 'token' => str_repeat( 'b', 64 ), 'phase' => 'result', 'status' => 'succeeded', 'code' => 'updated', 'job' => $queue_job ); Sunrise\agent_store( $pending );
+  update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $queue_job['id'], 'result' => array( 'status' => 'succeeded', 'code' => 'updated' ) ), false );
+ };
+ $complete_queue(); $result = Sunrise\agent_synchronize( false, 'sunrise_wake_check_in' );
+ hourly_check( ! is_wp_error( $result ) && $queue_done && 1 === $attempts && '2.0' === get_plugin_data( $directory . '/plugin.php', false, false )['Version'], 'The last acknowledged queued job hands off to a real native automatic installation in the same cron check-in' );
+ $ack = array_search( 'job_ack', $events, true ); $install = array_search( 'install', $events, true );
+ hourly_check( $ack < $install && in_array( 'report', array_slice( $events, $ack + 1, $install - $ack - 1 ), true ) && 'report' === end( $events ), 'Queue acknowledgment and a fresh empty-queue report precede automatic work; its completion is reported' );
+ $complete_queue(); $changed = $document; $changed['generation'] = 3; $queue_wire = $make_wire( $changed ); Sunrise\agent_synchronize();
+ $install = array_search( 'install', $events, true ); $prior_reports = count( array_filter( array_slice( $events, 0, $install ), static function ( $event ) { return 'report' === $event; } ) );
+ hourly_check( 1 === $attempts && 3 === $reports[ $prior_reports - 1 ]['policy_ack']['generation'], 'A policy received after the queued job is acknowledged before automatic installation' );
+ $complete_queue(); $lose_report = true; Sunrise\agent_synchronize(); $pending = Sunrise\agent_state()['pending_report']; $lose_report = false; Sunrise\agent_synchronize();
+ hourly_check( 1 === $attempts && in_array( $pending, $reports, true ) && 1 === count( array_filter( $events, static function ( $event ) { return 'job_ack' === $event; } ) ), 'A lost handoff completion report retries without repeating the queued job or automatic installation' );
+ $complete_queue(); add_filter( 'wp_doing_cron', '__return_false' ); Sunrise\agent_synchronize(); remove_filter( 'wp_doing_cron', '__return_false' );
+ hourly_check( $queue_done && 0 === $attempts, 'Foreground job completion does not start an automatic installer' );
+ $complete_queue(); update_option( 'sunrise_hourly_update_at', time(), false ); Sunrise\agent_synchronize();
+ hourly_check( $queue_done && 0 === $attempts, 'The final-job handoff cannot bypass the installation-wide hourly cooldown' );
+ $complete_queue(); $queue_more = true;
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( $owner ) ); Sunrise\agent_schedule( Sunrise\AGENT_INTERVAL ); $routine = wp_next_scheduled( 'sunrise_check_in', array( $owner ) );
+ Sunrise\agent_synchronize( false, 'sunrise_wake_check_in' ); $next = wp_next_scheduled( 'sunrise_wake_check_in', array( $owner ) );
+ hourly_check( $queue_done && 0 === $attempts && $next >= time() + 30 && $next <= time() + 95 && $routine === wp_next_scheduled( 'sunrise_check_in', array( $owner ) ), 'Remaining queued work keeps priority and its separate wake continuation preserves the routine event' );
+ $complete_queue(); $queue_lose_ack = true; $result = Sunrise\agent_synchronize();
+ hourly_check( is_wp_error( $result ) && 0 === $attempts && get_option( 'sunrise_remote_job_fence' ), 'A lost job acknowledgment retains the fence and cannot start automatic work' );
+ $complete_queue(); $queue_lose_sync = true; $result = Sunrise\agent_synchronize();
+ hourly_check( is_wp_error( $result ) && $queue_done && 0 === $attempts, 'A failed post-job check-in cannot authorize the handoff' );
+ $complete_queue(); $queue_uncertain = true; Sunrise\agent_synchronize();
+ hourly_check( 0 === $attempts && get_option( 'sunrise_remote_job_fence' ), 'An uncertain result stays fenced even if the subsequent queue report is empty' );
+ $complete_queue(); $paused = Sunrise\agent_state(); $paused['paused'] = true; Sunrise\agent_store( $paused ); Sunrise\agent_synchronize();
+ hourly_check( $queue_done && 0 === $attempts, 'Local pause still blocks automatic work after queue completion' );
+ $complete_queue(); $queue_job['status'] = 'failed'; $queue_job['payload']['installed_id'] = $id; $failed = Sunrise\agent_state(); $failed['remote_job']['status'] = 'failed'; $failed['remote_job']['job'] = $queue_job; Sunrise\agent_store( $failed ); Sunrise\agent_synchronize();
+ hourly_check( $queue_done && 0 === $attempts, 'A just-failed queued target is not immediately retried by the automatic handoff' );
+ $complete_queue(); update_option( 'sunrise_automatic_update_failures', array( 'plugin:' . $id => array( 'type' => 'plugin', 'installed_id' => $id, 'version' => '2.0', 'code' => 'rollback', 'failed_at' => time() ) ), false ); Sunrise\agent_synchronize();
+ hourly_check( $queue_done && 0 === $attempts, 'Failed target versions remain excluded after queue completion' );
+ $queue_job = null; $reset(); $queue_after_auto = true; Sunrise\agent_synchronize();
+ hourly_check( 1 === $attempts && in_array( 'job_claim', $events, true ) && array_search( 'job_claim', $events, true ) > array_search( 'install', $events, true ), 'New central work discovered by an automatic completion report still receives its immediate claim attempt' );
+ $queue_after_auto = false; $queue_done = false; $queue_wire = null;
  if ( ! defined( 'AUTOMATIC_UPDATER_DISABLED' ) ) { define( 'AUTOMATIC_UPDATER_DISABLED', true ); }
  add_filter( 'automatic_updater_disabled', '__return_true', 999 );
  $reset();
@@ -136,6 +186,7 @@ try {
  hourly_check( 1 === $attempts && in_array( $pending, $reports, true ), 'A lost completion report is retried without repeating the installation' );
  WP_CLI::success( 'Hourly native updates, rollback, interrupted-attempt guard, native retries, reporting and worker isolation passed.' );
 } finally {
+ remove_filter( 'wp_doing_cron', '__return_false' );
  remove_filter( 'automatic_updater_disabled', '__return_true', 999 ); remove_filter( 'file_mod_allowed', '__return_false' ); remove_filter( 'plugins_auto_update_enabled', '__return_false' );
  remove_filter( 'pre_http_request', $http ); remove_filter( 'upgrader_pre_download', $download ); remove_action( 'pre_auto_update', $pre, 20 );
  remove_filter( 'automatic_updater_disabled', '__return_false' ); remove_filter( 'automatic_updates_is_vcs_checkout', '__return_false' ); remove_filter( 'auto_plugin_theme_update_send_email', '__return_false' );

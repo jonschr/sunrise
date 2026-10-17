@@ -802,7 +802,17 @@ function agent_synchronize( $routine = false, $hook = 'sunrise_check_in' ) {
 		$job = agent_run_update_job();
 		if ( is_wp_error( $job ) ) { return $job; }
 		if ( $job ) {
+			$generation = agent_state()['applied']['generation'] ?? 0;
 			$result = agent_check_in();
+			// A drained queue should not leave automatic work waiting for another traffic-triggered check-in.
+			if ( ! is_wp_error( $result ) && empty( $result['work_available'] ) && wp_doing_cron() ) {
+				if ( empty( $result['license_refreshed'] ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in(); }
+				if ( ! is_wp_error( $result ) && ! empty( $result['license_refreshed'] ) ) { wp_clear_scheduled_hook( $hook, array( get_current_user_id() ) ); agent_schedule( 60, null, $hook ); return $result; }
+				if ( ! is_wp_error( $result ) && empty( $result['work_available'] ) ) {
+					require_once __DIR__ . '/hourly-updates.php';
+					if ( agent_run_hourly_updates() ) { $result = agent_check_in(); }
+				}
+			}
 			// Continue explicitly queued work, without increasing the routine inventory cadence.
 			if ( ! is_wp_error( $result ) && ! empty( $result['work_available'] ) && empty( agent_state()['remote_job'] ) && ! get_option( 'sunrise_remote_job_fence' ) ) {
 				wp_clear_scheduled_hook( $hook, array( get_current_user_id() ) );

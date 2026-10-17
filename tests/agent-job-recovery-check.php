@@ -6,12 +6,14 @@ require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
 $cron = get_option( 'cron' );
 $states = Sunrise\agent_states(); $state = Sunrise\agent_state(); $fence = get_option( 'sunrise_remote_job_fence', null );
 $routine_name = 'sunrise_routine_check_in_' . get_current_user_id(); $routine_due = get_option( $routine_name, null );
+$update_cache = get_option( 'external_updates-sunrise', null );
 if ( empty( $state['site_id'] ) || ! empty( $state['remote_job'] ) || $fence ) { WP_CLI::error( 'Enrolled fixture with no pending installation required.' ); }
 function sunrise_recovery_assert( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $job = array( 'id' => wp_generate_uuid4(), 'status' => 'uncertain', 'revision' => 4, 'payload' => array( 'action' => 'install_update', 'type' => 'plugin', 'installed_id' => 'never-installed/fixture.php', 'version' => '2.0', 'from_version' => '1.0', 'identity' => null ) );
 $record = array( 'token' => bin2hex( random_bytes( 32 ) ), 'phase' => 'executing', 'job' => $job );
 $reports = array(); $offline = true; $closed = false;
 $transport = function ( $pre, $options, $url ) use ( &$reports, &$offline, &$closed, &$job, &$state ) {
+ if ( false === strpos( $url, '/v1/agent/' ) ) { return new WP_Error( 'fixture_blocked', 'External providers blocked during recovery checks' ); }
  if ( '/check-in' === substr( $url, -9 ) ) {
   $request = json_decode( $options['body'], true ); $document = $state['applied']['document']; ++$document['generation']; $wire = wp_json_encode( $document );
   return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'receipt_sequence' => $request['sequence'], 'policy' => array( 'generation' => $document['generation'], 'document_json' => $wire, 'hash' => hash( 'sha256', $wire ) ), 'update_jobs' => true, 'work_available' => true ) ) );
@@ -60,4 +62,5 @@ try {
  remove_filter( 'pre_http_request', $transport ); Sunrise\agent_store_states( $states );
  if ( null === $fence ) { delete_option( 'sunrise_remote_job_fence' ); } else { update_option( 'sunrise_remote_job_fence', $fence, false ); }
  if ( null === $routine_due ) { delete_option( $routine_name ); } else { update_option( $routine_name, $routine_due, false ); }
+ if ( null === $update_cache ) { delete_option( 'external_updates-sunrise' ); } else { update_option( 'external_updates-sunrise', $update_cache, false ); }
 }
