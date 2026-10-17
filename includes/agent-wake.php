@@ -43,16 +43,15 @@ function agent_wake( $request ) {
   // Same signed request may be retried after a lost response, without rescheduling work.
   if ( ( $last['request_id'] ?? null ) === $data['request_id'] ) { $response['cron_spawned'] = ! empty( $last['cron_spawned'] ); return new \WP_REST_Response( $response, 202 ); }
   if ( isset( $last['issued_at'] ) && ( $data['issued_at'] < $last['issued_at'] || time() - $last['received_at'] < 30 ) ) { return new \WP_Error( 'sunrise_wake_rate_limited', 'A check-in was recently requested.', array( 'status' => 429 ) ); }
-  $args = array( (int) $state['user_id'] ); $next = wp_next_scheduled( 'sunrise_check_in', $args );
+  $args = array( (int) $state['user_id'] ); $next = wp_next_scheduled( 'sunrise_wake_check_in', $args );
   if ( ! $next || $next > time() ) {
-   if ( $next && ! wp_unschedule_event( $next, 'sunrise_check_in', $args ) ) { return new \WP_Error( 'sunrise_wake_schedule', 'Could not reschedule check-in.', array( 'status' => 500 ) ); }
-   $scheduled = wp_schedule_single_event( time() - 1, 'sunrise_check_in', $args, true );
+   if ( $next && ! wp_unschedule_event( $next, 'sunrise_wake_check_in', $args ) ) { return new \WP_Error( 'sunrise_wake_schedule', 'Could not reschedule check-in.', array( 'status' => 500 ) ); }
+   $scheduled = wp_schedule_single_event( time() - 1, 'sunrise_wake_check_in', $args, true );
    if ( is_wp_error( $scheduled ) || ! $scheduled ) {
-    if ( $next ) { wp_schedule_single_event( $next, 'sunrise_check_in', $args ); }
+    if ( $next ) { wp_schedule_single_event( $next, 'sunrise_wake_check_in', $args ); }
     return new \WP_Error( 'sunrise_wake_schedule', 'Could not schedule check-in.', array( 'status' => 500 ) );
    }
   }
-  delete_option( 'sunrise_routine_check_in_' . (int) $state['user_id'] );
   if ( ! update_option( $name, array( 'request_id' => $data['request_id'], 'issued_at' => $data['issued_at'], 'received_at' => time(), 'cron_spawned' => false ), false ) ) { return new \WP_Error( 'sunrise_wake_storage', 'Could not retain wake request.', array( 'status' => 500 ) ); }
  } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
  // Explicitly start the due event, even when page-triggered WP-Cron is disabled by the host.
@@ -61,3 +60,21 @@ function agent_wake( $request ) {
  if ( ( $last['request_id'] ?? null ) === $data['request_id'] ) { $last['cron_spawned'] = $response['cron_spawned']; update_option( $name, $last, false ); }
  return new \WP_REST_Response( $response, 202 );
 }
+
+add_action( 'sunrise_wake_check_in', function ( $user_id ) {
+ $states = agent_states();
+ if ( ! isset( $states[ $user_id ] ) || ! agent_owner_valid( $states[ $user_id ] ) || ! empty( $states[ $user_id ]['revoked'] ) || ! empty( $states[ $user_id ]['paused'] ) ) { return; }
+ $previous = get_current_user_id();
+ try {
+  wp_set_current_user( $user_id );
+  agent_schedule( AGENT_INTERVAL );
+  $result = agent_synchronize( false, 'sunrise_wake_check_in' );
+  agent_log( is_wp_error( $result ) ? 'wake_check_in_failed' : 'wake_check_in_succeeded', is_wp_error( $result ) ? agent_error_details( $result ) : array() );
+  $data = is_wp_error( $result ) ? $result->get_error_data() : null;
+  $state = agent_state();
+  // Preserve the normal schedule except when Control explicitly requires a longer backoff.
+  if ( $state && empty( $state['revoked'] ) && is_array( $data ) && isset( $data['retry_after'] ) && $data['retry_after'] > AGENT_INTERVAL ) {
+   wp_clear_scheduled_hook( 'sunrise_check_in', array( $user_id ) ); agent_schedule( $data['retry_after'] );
+  }
+ } finally { wp_set_current_user( $previous ); }
+}, 10, 1 );

@@ -175,8 +175,9 @@ try {
 		Sunrise\agent_store_states( array() ); do_action( 'sunrise_check_in', $original_user );
 		sunrise_agent_assert( 0 === $http_count && null === Sunrise\agent_effective_policy() && ! Sunrise\error_capture_enabled(), 'Unconnected plugin sends no reports and supplies no remote policy' );
 		Sunrise\agent_store_states( array( $original_user => $state ) ); Sunrise\agent_schedule( 300 );
+		Sunrise\agent_schedule( 60, null, 'sunrise_wake_check_in' );
 		$result = Sunrise\agent_check_in();
-		sunrise_agent_assert( is_wp_error( $result ) && Sunrise\agent_state()['revoked'] && ! wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ), 'Revocation stops this administrator check-in schedule' );
+		sunrise_agent_assert( is_wp_error( $result ) && Sunrise\agent_state()['revoked'] && ! wp_next_scheduled( 'sunrise_check_in', array( $original_user ) ) && ! wp_next_scheduled( 'sunrise_wake_check_in', array( $original_user ) ), 'Revocation stops this administrator regular and wake schedules' );
 		sunrise_agent_assert( null === Sunrise\agent_effective_policy() && false === Sunrise\agent_dashboard_url() && ! Sunrise\error_capture_enabled(), 'Revoked connection stops remote policy, dashboard and error reporting' );
 		ob_start(); Sunrise\admin_page(); $disconnected_html = ob_get_clean();
 		sunrise_agent_assert( false !== strpos( $disconnected_html, 'This connection was disconnected' ) && false !== strpos( $disconnected_html, 'agent_enroll' ) && false === strpos( $disconnected_html, 'id="sunrise-dashboard"' ), 'Disconnected administrator gets the reconnection page' );
@@ -184,7 +185,8 @@ try {
 		sunrise_agent_assert( $requests === $http_count, 'Known revoked connection remains idle on later sync attempts' );
 		$other_state = $state; $other_state['user_id'] = $other_admin; Sunrise\agent_store_states( array( $original_user => Sunrise\agent_state(), $other_admin => $other_state ) );
 		sunrise_agent_assert( null !== Sunrise\agent_effective_policy(), 'Other administrator policy remains active' );
-		sunrise_agent_assert( ! is_wp_error( Sunrise\agent_disconnect() ) && isset( Sunrise\agent_states()[ $other_admin ] ), 'Clearing revoked credentials leaves the other administrator connection intact' );
+		Sunrise\agent_schedule( 60, null, 'sunrise_wake_check_in' );
+		sunrise_agent_assert( ! is_wp_error( Sunrise\agent_disconnect() ) && isset( Sunrise\agent_states()[ $other_admin ] ) && ! wp_next_scheduled( 'sunrise_wake_check_in', array( $original_user ) ), 'Clearing revoked credentials removes pending wakes and leaves the other administrator connection intact' );
 		sunrise_agent_assert( $native_updates === get_site_option( 'auto_update_plugins' ), 'Disconnect does not rewrite native auto-update selections' );
 	} finally { remove_filter( 'pre_http_request', $reject ); }
 } finally {

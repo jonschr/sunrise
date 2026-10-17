@@ -127,6 +127,7 @@ function installation_resolve( $kind, $expected_id, $confirmed = false ) {
 		$identity['review'] = true;
 		if ( get_option( 'sunrise_installation' ) !== $identity && ! update_option( 'sunrise_installation', $identity, false ) ) { throw new \RuntimeException( 'Could not pause identity' ); }
 		wp_unschedule_hook( 'sunrise_check_in' );
+		wp_unschedule_hook( 'sunrise_wake_check_in' );
 		foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) { wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) ); }
 		global $wpdb;
 		delete_metadata( 'user', 0, 'sunrise_migration_draft', '', true );

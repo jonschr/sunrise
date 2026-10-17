@@ -17,6 +17,7 @@ global $wpdb;
 delete_metadata( 'user', 0, 'sunrise_migration_draft', '', true );
 delete_metadata( 'user', 0, 'sunrise_migration_pair_pending', '', true );
 wp_unschedule_hook( 'sunrise_check_in' );
+wp_unschedule_hook( 'sunrise_wake_check_in' );
 delete_metadata( 'user', 0, 'sunrise_file_pruned_at', '', true );
 foreach ( array( 'sunrise_manual_update_', 'sunrise_manual_guard_', 'sunrise_job_', 'sunrise_routine_check_in_', 'sunrise_connections_', 'sunrise_snapshot_', 'sunrise_error_ack_', 'sunrise_last_job_', 'sunrise_database_job_', 'sunrise_migration_nonce_', '_transient_sunrise_notice_', '_transient_timeout_sunrise_notice_' ) as $prefix ) {
 	$names = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) );

@@ -274,11 +274,11 @@ function agent_enroll_locked( $intent = null, $recover_identity = false ) {
 	return array( 'approval_url' => $intent ? add_query_arg( 'intent', $intent, $state['approval_url'] ) : $state['approval_url'], 'phrase' => $state['phrase'] );
 }
 
-function agent_schedule( $delay, $user_id = null ) {
+function agent_schedule( $delay, $user_id = null, $hook = 'sunrise_check_in' ) {
 	$args = array( null === $user_id ? get_current_user_id() : (int) $user_id );
-	if ( ! wp_next_scheduled( 'sunrise_check_in', $args ) ) {
+	if ( ! wp_next_scheduled( $hook, $args ) ) {
 		$at = time() + max( 30, $delay ) + wp_rand( 0, 30 );
-		if ( wp_schedule_single_event( $at, 'sunrise_check_in', $args ) ) {
+		if ( wp_schedule_single_event( $at, $hook, $args ) && 'sunrise_check_in' === $hook ) {
 			$name = 'sunrise_routine_check_in_' . $args[0];
 			if ( $delay >= AGENT_INTERVAL ) { update_option( $name, $at, false ); } else { delete_option( $name ); }
 		}
@@ -663,6 +663,7 @@ function agent_check_in( $routine = false ) {
 				if ( is_array( $data ) && 401 === ( $data['status'] ?? null ) ) {
 					$state['revoked'] = true; unset( $state['pending_report'] ); agent_store( $state );
 					wp_clear_scheduled_hook( 'sunrise_check_in', array( (int) $state['user_id'] ) );
+					wp_clear_scheduled_hook( 'sunrise_wake_check_in', array( (int) $state['user_id'] ) );
 				}
 				return $response;
 			}
@@ -739,6 +740,7 @@ function agent_disconnect_locked( $revoke = true ) {
 	$states = agent_states(); unset( $states[ get_current_user_id() ] );
 	if ( ! agent_store_states( $states ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not remove connection.' ); }
 	wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) );
+	wp_clear_scheduled_hook( 'sunrise_wake_check_in', array( get_current_user_id() ) );
 	delete_option( 'sunrise_routine_check_in_' . get_current_user_id() );
 	return array( 'disconnected' => true );
 }
@@ -782,11 +784,11 @@ function agent_reauthenticate() {
 }
 
 /** Internal background work runs as the enrolled owner after validating their capabilities. */
-function agent_synchronize( $routine = false ) {
+function agent_synchronize( $routine = false, $hook = 'sunrise_check_in' ) {
 	$state = agent_state();
 	$generation = isset( $state['applied']['generation'] ) ? $state['applied']['generation'] : 0;
 	$result = agent_check_in( $routine );
-	if ( ! is_wp_error( $result ) && ! empty( $result['license_refreshed'] ) ) { wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); agent_schedule( 60 ); return $result; }
+	if ( ! is_wp_error( $result ) && ! empty( $result['license_refreshed'] ) ) { wp_clear_scheduled_hook( $hook, array( get_current_user_id() ) ); agent_schedule( 60, null, $hook ); return $result; }
 	if ( ! is_wp_error( $result ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in(); }
 	if ( ! is_wp_error( $result ) && empty( $result['work_available'] ) && wp_doing_cron() ) {
 		require_once __DIR__ . '/hourly-updates.php';
@@ -800,8 +802,8 @@ function agent_synchronize( $routine = false ) {
 			$result = agent_check_in();
 			// Continue explicitly queued work, without increasing the routine inventory cadence.
 			if ( ! is_wp_error( $result ) && ! empty( $result['work_available'] ) && empty( agent_state()['remote_job'] ) && ! get_option( 'sunrise_remote_job_fence' ) ) {
-				wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) );
-				agent_schedule( 60 );
+				wp_clear_scheduled_hook( $hook, array( get_current_user_id() ) );
+				agent_schedule( 60, null, $hook );
 			}
 		}
 	}

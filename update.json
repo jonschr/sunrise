@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.26",
+  "version": "0.3.27",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.26/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.27/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Report native dashboard manual update successes, safe failures and unverified interruptions separately from automatic and Sunrise updates. Retain an acknowledged per-account event journal for 90 days; keep normal retries available."
+    "changelog": "Run instant refreshes and their follow-ups separately from regular hourly check-ins. Preserve routine cadence tracking, authentication, replay protection and explicit Retry-After backoff."
   }
 }

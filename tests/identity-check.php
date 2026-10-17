@@ -63,9 +63,10 @@ try {
 	wp_set_current_user( 0 );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_resolve( 'clone', $id, true ) ), 'Recovery requires the authorized local owner' );
 	wp_set_current_user( $original_user );
+	Sunrise\agent_schedule( 60, null, 'sunrise_wake_check_in' );
 	$result = Sunrise\installation_resolve( 'clone', $id, true );
 	sunrise_identity_assert( ! is_wp_error( $result ) && $result['installation_id'] !== $id && ! Sunrise\agent_state()
-		&& ! wp_next_scheduled( 'sunrise_check_in' ) && ! get_option( 'sunrise_policy' ) && 0 === $calls && true === Sunrise\installation_guard(), 'Clone recovery generates a fresh identity and clears copied state without contacting the original enrollment' );
+		&& ! wp_next_scheduled( 'sunrise_check_in' ) && ! wp_next_scheduled( 'sunrise_wake_check_in', array( $original_user ) ) && ! get_option( 'sunrise_policy' ) && 0 === $calls && true === Sunrise\installation_guard(), 'Clone recovery generates a fresh identity and clears copied state and pending wakes without contacting the original enrollment' );
 	$restore(); $identity = Sunrise\installation_identity(); $id = $identity['id'];
 	add_filter( 'salt', $salt );
 	sunrise_identity_assert( is_wp_error( Sunrise\installation_guard() ) && $id === Sunrise\installation_identity()['id'], 'Salt rotation pauses the connection without changing the installation ID' );

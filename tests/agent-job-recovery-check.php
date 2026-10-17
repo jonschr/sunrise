@@ -5,6 +5,7 @@ require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
 require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
 $cron = get_option( 'cron' );
 $states = Sunrise\agent_states(); $state = Sunrise\agent_state(); $fence = get_option( 'sunrise_remote_job_fence', null );
+$routine_name = 'sunrise_routine_check_in_' . get_current_user_id(); $routine_due = get_option( $routine_name, null );
 if ( empty( $state['site_id'] ) || ! empty( $state['remote_job'] ) || $fence ) { WP_CLI::error( 'Enrolled fixture with no pending installation required.' ); }
 function sunrise_recovery_assert( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $job = array( 'id' => wp_generate_uuid4(), 'status' => 'uncertain', 'revision' => 4, 'payload' => array( 'action' => 'install_update', 'type' => 'plugin', 'installed_id' => 'never-installed/fixture.php', 'version' => '2.0', 'from_version' => '1.0', 'identity' => null ) );
@@ -47,8 +48,16 @@ try {
  wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); Sunrise\agent_schedule( 5 * MINUTE_IN_SECONDS );
  $synced = Sunrise\agent_synchronize(); $next = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
  sunrise_recovery_assert( ! is_wp_error( $synced ) && $next >= time() + 30 && $next <= time() + 95 && empty( Sunrise\agent_state()['remote_job'] ), 'Finishing a queued job schedules remaining explicit work soon, replacing the routine hourly event' );
+ $state['remote_job'] = $record; Sunrise\agent_store( $state );
+ update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'], 'result' => array( 'status' => 'succeeded', 'code' => 'updated' ) ), false );
+ wp_clear_scheduled_hook( 'sunrise_check_in', array( get_current_user_id() ) ); Sunrise\agent_schedule( Sunrise\AGENT_INTERVAL );
+ $routine = wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) );
+ wp_clear_scheduled_hook( 'sunrise_wake_check_in', array( get_current_user_id() ) );
+ $synced = Sunrise\agent_synchronize( false, 'sunrise_wake_check_in' ); $next = wp_next_scheduled( 'sunrise_wake_check_in', array( get_current_user_id() ) );
+ sunrise_recovery_assert( ! is_wp_error( $synced ) && $next >= time() + 30 && $next <= time() + 95 && $routine === wp_next_scheduled( 'sunrise_check_in', array( get_current_user_id() ) ) && $routine === get_option( $routine_name ), 'Wake job continuation runs soon on its separate hook without changing the regular event or routine marker' );
 } finally {
  update_option( 'cron', $cron );
  remove_filter( 'pre_http_request', $transport ); Sunrise\agent_store_states( $states );
  if ( null === $fence ) { delete_option( 'sunrise_remote_job_fence' ); } else { update_option( 'sunrise_remote_job_fence', $fence, false ); }
+ if ( null === $routine_due ) { delete_option( $routine_name ); } else { update_option( $routine_name, $routine_due, false ); }
 }

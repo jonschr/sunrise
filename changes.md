@@ -2,6 +2,11 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.27 — 2026-10-17
+
+- Run instant refreshes and their follow-up work separately from regular hourly check-ins. Preserve the existing hourly event and routine cadence marker when a refresh is requested or completed.
+- Retain authenticated wake requests, replay protection and explicit Retry-After backoff. Clear pending wake events on revocation, disconnect, identity reset, deactivation and uninstall.
+
 ## 0.3.26 — 2026-10-16
 
 - Capture authenticated native dashboard plugin, theme and core update attempts separately from automatic and Sunrise runs. Record UUIDs before installation; verify installed versions and report safe failure categories or unverified interruptions without provider messages, packages, credentials or user identifiers.
