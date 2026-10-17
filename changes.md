@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+No pending changes.
+
+## 0.3.29 — 2026-10-17
+
 - Recheck eligible automatic updates immediately after the final queued update is acknowledged and Control confirms the queue is empty. Preserve the hourly cooldown, failed-version exclusions, pauses, worker locks and normal queued-work continuation.
 
 ## 0.3.28 — 2026-10-17

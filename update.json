@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.28/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.29/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Enabled Sunrise policies take precedence over the global automatic-updater block without an extra toggle. Report actual updater availability; preserve component policies, file restrictions, pauses and retry protections."
+    "changelog": "Recheck eligible automatic updates immediately after the final queued update is acknowledged and Control confirms the queue is empty. Preserve hourly cooldowns, failed-version exclusions, pauses and worker locks."
   }
 }
