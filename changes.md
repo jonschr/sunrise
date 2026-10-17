@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+No pending changes.
+
+## 0.3.28 — 2026-10-17
+
 - Automatically let enabled Sunrise policies take precedence over WordPress’s global automatic-updater switch, including host blocks, without an extra toggle. Report actual updater availability after Control negotiates support; retain file restrictions, per-component policies, pauses, identity/worker guards and failed-version retry protections.
 
 ## 0.3.27 — 2026-10-17
