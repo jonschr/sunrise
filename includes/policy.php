@@ -3,6 +3,35 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
+/** Enabled Sunrise policies take precedence over the host's global automatic-updater switch. */
+function policy_enables_automatic_updates() {
+	if ( is_wp_error( installation_guard() ) ) { return false; }
+	$effective = agent_effective_policy();
+	if ( ! $effective ) { return false; }
+	$managed = $effective['policy'];
+	if ( 'on' === $managed['site'] || in_array( $managed['core'], array( 'minor', 'all' ), true ) ) { return true; }
+	foreach ( array( 'plugins', 'themes' ) as $type ) {
+		if ( 'on' === ( $managed['category_defaults'][ $type ] ?? null ) || in_array( 'on', $managed[ $type ], true ) ) { return true; }
+	}
+	return false;
+}
+function filter_automatic_updater_disabled( $disabled ) {
+	return $disabled && policy_enables_automatic_updates() ? false : $disabled;
+}
+add_filter( 'automatic_updater_disabled', __NAMESPACE__ . '\\filter_automatic_updater_disabled', PHP_INT_MAX );
+
+function agent_automatic_updater_status() {
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	return array(
+		'policy_enabled' => policy_enables_automatic_updates(),
+		'disabled' => (bool) ( new \WP_Automatic_Updater() )->is_disabled(),
+		'plugins_enabled' => (bool) wp_is_auto_update_enabled_for_type( 'plugin' ),
+		'themes_enabled' => (bool) wp_is_auto_update_enabled_for_type( 'theme' ),
+		'file_modifications_allowed' => (bool) wp_is_file_mod_allowed( 'automatic_updater' ),
+		'installing' => wp_installing(),
+	);
+}
+
 /** Compare decimal strings without depending on PHP's integer width. */
 function agent_choose_policy( $best, $mode, $decision, $identity = null ) {
 	$candidate = array( 'mode' => $mode, 'decision' => $decision, 'identity' => $identity );

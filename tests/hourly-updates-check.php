@@ -5,15 +5,15 @@ $names = array( 'cron', 'active_plugins', 'sunrise_agents', 'sunrise_agent', 'su
 $saved = array(); foreach ( $names as $name ) { $saved[ $name ] = get_option( $name, null ); }
 $transients = array(); foreach ( array( 'core', 'plugins', 'themes' ) as $type ) { $transients[ $type ] = get_site_transient( 'update_' . $type ); }
 $anchor_path = WP_CONTENT_DIR . '/sunrise-installation.php'; $anchor = file_exists( $anchor_path ) ? file_get_contents( $anchor_path ) : null;
-$directory = WP_PLUGIN_DIR . '/sunrise-hourly-fixture'; $id = 'sunrise-hourly-fixture/plugin.php'; $zip = null; $reports = array(); $attempts = 0; $mode = 'success'; $wire = null; $events = array(); $lose_report = false; $offline = false;
+$directory = WP_PLUGIN_DIR . '/sunrise-hourly-fixture'; $id = 'sunrise-hourly-fixture/plugin.php'; $zip = null; $reports = array(); $attempts = 0; $mode = 'success'; $wire = null; $events = array(); $lose_report = false; $offline = false; $updater_status = false;
 if ( file_exists( $directory ) ) { WP_CLI::error( 'Fixture directory already exists.' ); }
 function hourly_check( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $response = static function ( $body ) { return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( $body ) ); };
-$http = function ( $pre, $args, $url ) use ( &$reports, &$attempts, &$mode, &$wire, &$events, &$lose_report, &$offline, $id, $response ) {
+$http = function ( $pre, $args, $url ) use ( &$reports, &$attempts, &$mode, &$wire, &$events, &$lose_report, &$offline, &$updater_status, $id, $response ) {
  if ( false !== strpos( $url, '/v1/agent/check-in' ) ) {
   $report = json_decode( $args['body'], true ); $reports[] = $report; $events[] = 'report';
   if ( $offline || ( $lose_report && $attempts ) ) { return new WP_Error( 'fixture_offline', 'Simulated lost response' ); }
-  return $response( array( 'receipt_sequence' => $report['sequence'], 'policy' => $wire, 'update_failures' => true, 'update_activity' => true, 'update_failure_details' => true, 'failure_checks' => array(), 'check_in_cadence' => true ) );
+  return $response( array_merge( $updater_status ? array( 'automatic_updater_status' => true ) : array(), array( 'receipt_sequence' => $report['sequence'], 'policy' => $wire, 'update_failures' => true, 'update_activity' => true, 'update_failure_details' => true, 'failure_checks' => array(), 'check_in_cadence' => true ) ) );
  }
  if ( false !== strpos( $url, 'wp_scrape_key=' ) ) {
   parse_str( wp_parse_url( $url, PHP_URL_QUERY ), $query ); $key = $query['wp_scrape_key'];
@@ -66,6 +66,49 @@ try {
  hourly_check( '2.0' === $reported[0]['version'] && 'succeeded' === $last['automatic_update_activity'][0]['status'], 'Completion immediately reports installed inventory and native success activity' );
  hourly_check( array_search( 'install', $events, true ) >= 2 && 'report' === end( $events ), 'Fresh policy and acknowledgment precede installation; the final operation reports results' );
  $count = count( $reports ); Sunrise\agent_synchronize( true ); hourly_check( 1 === $attempts && count( $reports ) === $count + 1, 'Repeated background checks share the installation-wide hourly cooldown' );
+ if ( ! defined( 'AUTOMATIC_UPDATER_DISABLED' ) ) { define( 'AUTOMATIC_UPDATER_DISABLED', true ); }
+ add_filter( 'automatic_updater_disabled', '__return_true', 999 );
+ $reset();
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'A host block remains intact before an enabled policy is applied' );
+ Sunrise\agent_synchronize( true );
+ hourly_check( 1 === $attempts && '2.0' === get_plugin_data( $directory . '/plugin.php', false, false )['Version'], 'An enabled Sunrise policy automatically permits native installation despite a host block and constant' );
+ $last = end( $reports ); hourly_check( ! isset( $last['automatic_updater'] ), 'Policy precedence works with older Control without sending unsupported status fields' );
+ $before = count( $reports ); $updater_status = true; Sunrise\agent_synchronize( true );
+ hourly_check( count( $reports ) === $before + 2, 'New status capability prompts a follow-up even when the policy generation is unchanged' );
+ $last = end( $reports ); hourly_check( true === $last['automatic_updater']['policy_enabled'] && false === $last['automatic_updater']['disabled'], 'Negotiation reports measured updater availability without a manual override' );
+ $enabled_state = Sunrise\agent_state();
+ foreach ( array( 'paused', 'revoked' ) as $flag ) {
+  $blocked = $enabled_state; $blocked[ $flag ] = true; Sunrise\agent_store( $blocked );
+  hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'Policy precedence respects ' . $flag );
+ }
+ $blocked = $enabled_state; $blocked['user_id'] = 0; Sunrise\agent_store_states( array( $owner => $blocked ) );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'An owner without update capabilities cannot override the host switch' );
+ $blocked = $enabled_state; unset( $blocked['applied'] ); Sunrise\agent_store( $blocked );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'An unapplied connection cannot override the host switch' );
+ $blocked = $enabled_state; $blocked['control_url'] = 'https://other.invalid'; Sunrise\agent_store( $blocked );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'Environment changes do not carry policy precedence into another service' );
+ $blocked = $enabled_state; $blocked['url'] .= '/copy'; Sunrise\agent_store( $blocked );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'A changed installation URL disables policy precedence' );
+ Sunrise\agent_store( $enabled_state ); update_option( 'sunrise_remote_job_fence', array( 'fixture' => true ), false );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'An unresolved worker fence blocks policy precedence' ); delete_option( 'sunrise_remote_job_fence' );
+ $blocked = $enabled_state; $blocked['applied']['document']['policy']['plugins'][ $id ] = 'off'; Sunrise\agent_store( $blocked );
+ hourly_check( ! Sunrise\filter_item( true, (object) array( 'plugin' => $id ), 'plugin' ) && ( new WP_Automatic_Updater() )->is_disabled(), 'Ignored components remain off and an all-off policy restores the host switch' );
+ foreach ( array( 'minor', 'all' ) as $core_mode ) {
+  $core_state = $blocked; $core_state['applied']['document']['policy']['core'] = $core_mode; Sunrise\agent_store( $core_state );
+  hourly_check( ! ( new WP_Automatic_Updater() )->is_disabled(), 'Core ' . $core_mode . ' policy also takes precedence over the host switch' );
+ }
+ foreach ( array( 'plugins', 'themes' ) as $category ) {
+  $category_state = $blocked; $category_state['applied']['document']['category_defaults'][ $category ] = 'on'; Sunrise\agent_store( $category_state );
+  hourly_check( ! ( new WP_Automatic_Updater() )->is_disabled(), 'An enabled ' . $category . ' category takes precedence over the host switch' );
+ }
+ Sunrise\agent_store( $enabled_state ); add_filter( 'file_mod_allowed', '__return_false' );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled(), 'Policy precedence cannot bypass native filesystem restrictions' );remove_filter( 'file_mod_allowed', '__return_false' );
+ add_filter( 'plugins_auto_update_enabled', '__return_false' );
+ hourly_check( ! Sunrise\agent_automatic_updater_status()['plugins_enabled'], 'Separate host plugin-type restrictions remain visible' );remove_filter( 'plugins_auto_update_enabled', '__return_false' );
+ $off_document = $document; $off_document['generation'] = 3; $off_document['policy']['plugins'][ $id ] = 'off'; $wire = $make_wire( $off_document );
+ Sunrise\agent_synchronize( true );
+ hourly_check( ( new WP_Automatic_Updater() )->is_disabled() && ! Sunrise\policy_enables_automatic_updates(), 'Withdrawing the last enabled policy restores the host block without a toggle' );
+ $wire = $make_wire( $document ); remove_filter( 'automatic_updater_disabled', '__return_true', 999 ); $updater_status = false;
  $reset(); $mode = 'rollback'; Sunrise\agent_synchronize( true );
  hourly_check( 1 === $attempts && '1.0' === get_plugin_data( $directory . '/plugin.php', false, false )['Version'], 'Native fatal-error detection restores the previous plugin files' );
  delete_option( 'sunrise_hourly_update_at' ); delete_option( 'sunrise_last_refresh' ); Sunrise\agent_synchronize( true );
@@ -93,6 +136,7 @@ try {
  hourly_check( 1 === $attempts && in_array( $pending, $reports, true ), 'A lost completion report is retried without repeating the installation' );
  WP_CLI::success( 'Hourly native updates, rollback, interrupted-attempt guard, native retries, reporting and worker isolation passed.' );
 } finally {
+ remove_filter( 'automatic_updater_disabled', '__return_true', 999 ); remove_filter( 'file_mod_allowed', '__return_false' ); remove_filter( 'plugins_auto_update_enabled', '__return_false' );
  remove_filter( 'pre_http_request', $http ); remove_filter( 'upgrader_pre_download', $download ); remove_action( 'pre_auto_update', $pre, 20 );
  remove_filter( 'automatic_updater_disabled', '__return_false' ); remove_filter( 'automatic_updates_is_vcs_checkout', '__return_false' ); remove_filter( 'auto_plugin_theme_update_send_email', '__return_false' );
  foreach ( $saved as $name => $value ) { if ( null === $value ) { delete_option( $name ); } else { update_option( $name, $value, false ); } }
