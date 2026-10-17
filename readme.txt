@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.25
+Stable tag: 0.3.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,11 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.26 =
+* Report native dashboard manual update successes, safe failures and unverified interruptions separately from automatic/Sunrise runs.
+* Retain a 90-day acknowledged event journal with independent account cursors and safe replay.
+* Exclude failed/unconfirmed manual versions from bonus hourly passes while preserving normal retries.
 
 = 0.3.25 =
 * Add a guarded hourly native automatic-update pass after background policy sync, with immediate result reporting.

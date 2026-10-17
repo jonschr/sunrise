@@ -2,6 +2,13 @@
 
 Release history starts with 0.2.0. Earlier development commits are not backfilled.
 
+## 0.3.26 — 2026-10-16
+
+- Capture authenticated native dashboard plugin, theme and core update attempts separately from automatic and Sunrise runs. Record UUIDs before installation; verify installed versions and report safe failure categories or unverified interruptions without provider messages, packages, credentials or user identifiers.
+- Retain concurrent-safe local event rows for 90 days and report batches of up to 100 after Control negotiates support. Advance an independent cursor for each account only after its exact pending report is acknowledged; retain unsent events across response loss.
+- Exclude failed/unconfirmed manual target versions from the bonus hourly updater for 90 days, while retaining normal native retries and explicit updates. Confirmed manual success clears the target guard. Clean up local journal/guards on identity reset or uninstall.
+- Verify real native plugin/theme/bulk installation, core download errors, no-change and interrupted outcomes, source isolation, paging and multi-account acknowledgment on PHP 8.1 and 8.5 with all HTTP intercepted.
+
 ## 0.3.25 — 2026-10-16
 
 - After successful background policy synchronization, refresh offers and run WordPress's native automatic updater at most once per hour per installation. Respect effective policies, local pause, native restrictions, queued central work and shared worker/process locks; report inventory and outcomes immediately afterward.

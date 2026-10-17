@@ -35,8 +35,8 @@ try {
  require_once ABSPATH . 'wp-admin/includes/admin.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
  wp_register_plugin_realpath( WP_PLUGIN_DIR . '/sunrise/sunrise.php' );
- if ( ! function_exists( 'Sunrise\\agent_state' ) ) { require WP_PLUGIN_DIR . '/sunrise/sunrise.php'; }
- require_once WP_PLUGIN_DIR . '/sunrise/includes/controller.php'; require_once WP_PLUGIN_DIR . '/sunrise/includes/api.php'; require_once WP_PLUGIN_DIR . '/sunrise/includes/hourly-updates.php';
+ if ( ! function_exists( 'Sunrise\\agent_state' ) ) { require dirname( __DIR__ ) . '/sunrise.php'; }
+ require_once dirname( __DIR__ ) . '/includes/controller.php'; require_once dirname( __DIR__ ) . '/includes/api.php'; require_once dirname( __DIR__ ) . '/includes/hourly-updates.php';
  $owner = get_current_user_id(); $identity = wp_generate_uuid4(); Sunrise\installation_write_anchor( $identity );
  update_option( 'sunrise_installation', array_merge( array( 'id' => $identity, 'review' => false, 'anchor_required' => true ), Sunrise\installation_markers( $identity ) ), false );
  $decision = array( 'revision' => '2', 'specificity' => 1 );

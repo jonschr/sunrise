@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.25/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.26/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Run one guarded native automatic-update pass per hour after policy synchronization. Skip failed or unconfirmed versions only during this extra pass; retain normal WordPress retries and report completed updates immediately."
+    "changelog": "Report native dashboard manual update successes, safe failures and unverified interruptions separately from automatic and Sunrise updates. Retain an acknowledged per-account event journal for 90 days; keep normal retries available."
   }
 }

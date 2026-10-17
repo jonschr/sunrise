@@ -633,6 +633,10 @@ function agent_check_in( $routine = false ) {
 					if ( $resolved ) { $state['pending_report']['resolved_failures'] = $resolved; }
 				}
 				if ( ! empty( $state['update_activity'] ) ) { $state['pending_report']['automatic_update_activity'] = automatic_update_activity(); }
+				if ( ! empty( $state['manual_update_activity'] ) ) {
+					list( $events, $cursor ) = manual_update_activity( $state['manual_activity_cursor'] ?? 0 );
+					$state['pending_report']['manual_update_activity'] = $events; $state['pending_manual_activity_cursor'] = $cursor;
+				}
 				if ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) {
 					$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
 				}
@@ -681,6 +685,9 @@ function agent_check_in( $routine = false ) {
 		$state['update_failures'] = isset( $response['update_failures'] ) && true === $response['update_failures'];
 		$state['update_failure_details'] = ! empty( $response['update_failure_details'] );
 		$state['update_activity'] = isset( $response['update_activity'] ) && true === $response['update_activity'];
+		$state['manual_update_activity'] = ! empty( $response['manual_update_activity'] );
+		if ( isset( $state['pending_report']['manual_update_activity'], $state['pending_manual_activity_cursor'] ) ) { $state['manual_activity_cursor'] = $state['pending_manual_activity_cursor']; }
+		unset( $state['pending_manual_activity_cursor'] );
 		$state['failure_checks'] = isset( $response['failure_checks'] ) ? $response['failure_checks'] : array();
 		if ( isset( $response['sunrise_latest_version'] ) ) {
 			$latest = $response['sunrise_latest_version'];
