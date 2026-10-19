@@ -336,7 +336,7 @@ function agent_installation_diagnostics() {
 function agent_connection_diagnostics( $state, $user_id ) {
 	$next = wp_next_scheduled( 'sunrise_check_in', array( (int) $user_id ) );
 	return array(
-		'user_id' => (int) $user_id, 'owner_valid' => agent_owner_valid( $state ), 'connected' => ! empty( $state['site_id'] ), 'revoked' => ! empty( $state['revoked'] ), 'paused' => ! empty( $state['paused'] ),
+		'user_id' => (int) $user_id, 'owner_login' => ( $owner = get_user_by( 'id', $user_id ) ) ? $owner->user_login : null, 'owner_name' => $owner ? $owner->display_name : null, 'owner_valid' => agent_owner_valid( $state ), 'connected' => ! empty( $state['site_id'] ), 'revoked' => ! empty( $state['revoked'] ), 'paused' => ! empty( $state['paused'] ),
 		'control_url' => $state['control_url'] ?? null, 'site_url' => $state['url'] ?? null, 'current_site_url' => installation_site_url(),
 		'control_matches' => agent_service_matches( $state ), 'site_url_matches' => isset( $state['url'] ) && $state['url'] === installation_site_url(),
 		'account_id' => $state['account_id'] ?? null, 'network_id' => $state['network_id'] ?? null, 'site_id' => $state['site_id'] ?? null,
@@ -350,12 +350,14 @@ function agent_connection_diagnostics( $state, $user_id ) {
 }
 
 function agent_diagnostic_log() {
-	$state = agent_state(); $connections = $state ? array( agent_connection_diagnostics( $state, get_current_user_id() ) ) : array();
+	if ( ! current_user_can( 'manage_options' ) ) { return array(); }
+	$connections = array(); $user_id = get_current_user_id();
+	foreach ( agent_states() as $owner_id => $state ) { $connections[] = agent_connection_diagnostics( $state, $owner_id ); }
 	$cutoff = time() - 14 * DAY_IN_SECONDS;
 	$events = array_filter( get_option( 'sunrise_agent_log', array() ), function ( $entry ) use ( $cutoff ) { return isset( $entry['last_at'] ) && $entry['last_at'] >= $cutoff; } );
 	$events = array_map( function ( $entry ) { $entry['first_at'] = gmdate( 'c', $entry['first_at'] ); $entry['last_at'] = gmdate( 'c', $entry['last_at'] ); return $entry; }, array_reverse( $events ) );
 	return array(
-		'generated_at' => gmdate( 'c' ), 'sunrise_version' => VERSION, 'wordpress_version' => get_bloginfo( 'version' ), 'php_version' => PHP_VERSION,
+		'generated_at' => gmdate( 'c' ), 'administrator_id' => $user_id, 'sunrise_version' => VERSION, 'wordpress_version' => get_bloginfo( 'version' ), 'php_version' => PHP_VERSION,
 		'environment' => wp_get_environment_type(), 'timezone' => wp_timezone_string(), 'wp_cron_disabled' => defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON,
 		'installation' => agent_installation_diagnostics(), 'connections' => $connections, 'events' => $events,
 	);
@@ -609,7 +611,7 @@ function agent_site_profile() {
 	return $profile;
 }
 
-function agent_check_in( $routine = false ) {
+function agent_check_in( $routine = false, $allow_recovery = true ) {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'A check-in is already running.' ); }
 	$previous = get_current_user_id();
@@ -618,6 +620,7 @@ function agent_check_in( $routine = false ) {
 		if ( ! $state || empty( $state['enrollment_id'] ) ) { return new \WP_Error( 'sunrise_not_enrolled', 'Start enrollment first.' ); }
 		if ( ! empty( $state['revoked'] ) ) { return new \WP_Error( 'sunrise_disconnected', 'This connection was disconnected. Reconnect this administrator to continue.' ); }
 		$identity = installation_guard();
+		if ( ! $allow_recovery && ( empty( $state['site_id'] ) || ! empty( $state['reconnect'] ) || ! empty( $state['identity_recovery'] ) || is_wp_error( $identity ) || ! agent_service_matches( $state ) || $state['url'] !== installation_site_url() ) ) { return new \WP_Error( 'sunrise_owner_repair_required', 'The connection owner must repair this connection before another administrator can check in.' ); }
 		$recover_identity = ! empty( $state['identity_recovery'] ) && empty( $state['site_id'] ) && agent_reconnectable( $state );
 		if ( ! $recover_identity && ( is_wp_error( $identity ) || ! empty( $state['reconnect'] ) ) ) {
 			$reconnected = agent_reconnect( $state ); if ( is_wp_error( $reconnected ) ) { return $reconnected; }
@@ -796,6 +799,25 @@ function agent_sync() {
 	$result = agent_synchronize();
 	agent_log( agent_connection_pending( $result ) ? 'manual_check_in_pending' : ( is_wp_error( $result ) ? 'manual_check_in_failed' : 'manual_check_in_succeeded' ), is_wp_error( $result ) ? agent_error_details( $result ) : array() );
 	return $result;
+}
+
+/** Administrators may request a report through an existing owner; this never repairs or runs installation jobs. */
+function agent_site_check_in( $user_id ) {
+ if ( ! is_ssl() && 'local' !== wp_get_environment_type() ) { return new \WP_Error( 'sunrise_https_required', 'HTTPS is required outside an explicitly local environment.', array( 'status' => 403 ) ); }
+ if ( ! current_user_can( 'manage_options' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'Administrator access is required.', array( 'status' => 403 ) ); }
+ $user_id = filter_var( $user_id, FILTER_VALIDATE_INT, array( 'options' => array( 'min_range' => 1 ) ) );
+ $states = agent_states(); $state = $user_id && isset( $states[ $user_id ] ) ? $states[ $user_id ] : array();
+ if ( ! $state || (int) $state['user_id'] !== $user_id || empty( $state['site_id'] ) || ! empty( $state['revoked'] ) || ! agent_owner_valid( $state ) ) { return new \WP_Error( 'sunrise_connection_unavailable', 'The connection is unavailable. Ask its owner to reconnect it.' ); }
+ $actor = get_current_user_id();
+ try {
+  wp_set_current_user( $user_id );
+  $generation = $state['applied']['generation'] ?? 0;
+  $result = agent_check_in( false, false );
+  if ( ! is_wp_error( $result ) && empty( $result['license_refreshed'] ) && ( $result['policy_generation'] !== $generation || ! empty( $result['refreshed'] ) || ! empty( $result['profile_pending'] ) ) ) { $result = agent_check_in( false, false ); }
+  if ( ! is_wp_error( $result ) ) { agent_report_errors(); }
+  agent_log( is_wp_error( $result ) ? 'administrator_check_in_failed' : 'administrator_check_in_succeeded', array_merge( array( 'requested_by' => $actor ), is_wp_error( $result ) ? agent_error_details( $result ) : array() ) );
+  return is_wp_error( $result ) ? $result : array( 'checked_in' => true );
+ } finally { wp_set_current_user( $actor ); }
 }
 
 /** Browser recovery starts or resumes the same request; success includes its first real report. */

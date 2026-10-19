@@ -42,11 +42,30 @@ function connection_form( $operation = 'agent_enroll', $label = 'Connect this si
 
 function diagnostic_log_section() {
 	$diagnostics = wp_json_encode( agent_diagnostic_log(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
-	echo '<details class="sunrise-diagnostics"><summary>' . esc_html__( 'Diagnostic log', 'sunrise' ) . '</summary><p>' . esc_html__( 'Includes site and Control identifiers and URLs needed for support. It excludes credentials, salts, cookies, authorization headers, request bodies, and personal user data.', 'sunrise' ) . '</p><p><button type="button" class="button" data-sunrise-copy-log>' . esc_html__( 'Copy diagnostic log', 'sunrise' ) . '</button> <span role="status" aria-live="polite"></span></p><textarea readonly rows="16" id="sunrise-diagnostic-log">' . esc_textarea( $diagnostics ) . '</textarea></details>';
+	echo '<details class="sunrise-diagnostics"><summary>' . esc_html__( 'Diagnostic log', 'sunrise' ) . '</summary><p>' . esc_html__( 'Includes connection-owner names, WordPress user IDs, site and Control identifiers, URLs and recent events for support. It excludes credentials, salts, cookies, authorization headers and request bodies.', 'sunrise' ) . '</p><p><button type="button" class="button" data-sunrise-copy-log>' . esc_html__( 'Copy diagnostic log', 'sunrise' ) . '</button> <span role="status" aria-live="polite"></span></p><textarea readonly rows="16" id="sunrise-diagnostic-log">' . esc_textarea( $diagnostics ) . '</textarea></details>';
+}
+
+/** Shared maintenance view; each connection's repair controls remain on its owner's page. */
+function other_connections_section() {
+ $shown = false;
+ foreach ( agent_states() as $owner_id => $state ) {
+  if ( (int) $owner_id === get_current_user_id() || empty( $state['site_id'] ) ) { continue; }
+  $shown = true; $owner = get_user_by( 'id', $owner_id );
+  $name = $owner ? $owner->display_name . ' (' . $owner->user_login . ')' : sprintf( __( 'Deleted administrator (ID %d)', 'sunrise' ), $owner_id );
+  $ready = empty( $state['revoked'] ) && empty( $state['reconnect'] ) && empty( $state['identity_recovery'] ) && agent_owner_valid( $state ) && agent_service_matches( $state ) && ! is_wp_error( installation_guard() ) && $state['url'] === installation_site_url();
+  echo '<section class="sunrise-settings-card"><h2>' . esc_html__( 'Site connection', 'sunrise' ) . '</h2><p><strong>' . esc_html__( 'Owned by', 'sunrise' ) . ': ' . esc_html( $name ) . '</strong></p>';
+  echo '<p>' . esc_html( $ready ? ( ! empty( $state['paused'] ) ? __( 'Connected; managed automatic updates paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ) : __( 'Owner attention required', 'sunrise' ) ) . '</p>';
+  if ( ! empty( $state['last_success'] ) ) { echo '<p>' . esc_html__( 'Last successful check-in', 'sunrise' ) . ': ' . esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $state['last_success'] ) ) . '</p>'; }
+  echo '<p>' . esc_html__( 'You can check in and copy diagnostics. Sign in as the connection owner to reconnect, replace credentials or disconnect.', 'sunrise' ) . '</p>';
+  if ( $ready ) { form_start( 'local', 'agent_site_check_in' ); echo '<input type="hidden" name="connection_user_id" value="' . esc_attr( $owner_id ) . '">'; submit_button( __( 'Check in now', 'sunrise' ), 'primary', 'submit', false ); echo '</form>'; }
+  echo '</section>';
+ }
+ return $shown;
 }
 
 add_action( 'admin_notices', function () {
 	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || 'settings_page_sunrise' === get_current_screen()->id ) { return; }
+	foreach ( agent_states() as $owner_state ) { if ( ! empty( $owner_state['site_id'] ) && empty( $owner_state['revoked'] ) && empty( $owner_state['reconnect'] ) && empty( $owner_state['identity_recovery'] ) && agent_owner_valid( $owner_state ) && agent_service_matches( $owner_state ) && $owner_state['url'] === installation_site_url() && ! is_wp_error( installation_guard() ) ) { return; } }
 	echo '<div class="notice notice-info"><p><strong>' . esc_html__( 'Connect this site to Sunrise', 'sunrise' ) . '</strong></p><p>' . esc_html__( 'Send this site’s update status to your Sunrise network and manage its updates there.', 'sunrise' ) . '</p>';
 	connection_form(); echo '<p></p></div>';
 } );
@@ -87,7 +106,7 @@ add_action( 'admin_post_sunrise', function () {
 		wp_die( esc_html__( 'Administrator access is required.', 'sunrise' ), '', array( 'response' => 403 ) );
 	}
 	check_admin_referer( 'sunrise' );
-	$access = agent_access( isset( $_POST['operation'] ) && in_array( $_POST['operation'], array( 'agent_enroll', 'agent_environment' ), true ) );
+	$access = agent_access( isset( $_POST['operation'] ) && in_array( $_POST['operation'], array( 'agent_enroll', 'agent_environment', 'agent_site_check_in' ), true ) );
 	$recovery = isset( $_POST['operation'] ) && 'identity_resolve' === $_POST['operation'] && is_wp_error( installation_guard() );
 	if ( is_wp_error( $access ) && ! $recovery ) { wp_die( esc_html( $access->get_error_message() ), '', array( 'response' => 403 ) ); }
 	admin_load();
@@ -113,6 +132,8 @@ add_action( 'admin_post_sunrise', function () {
 		$result = agent_disconnect();
 	} elseif ( 'agent_pause' === $action || 'agent_resume' === $action ) {
 		$result = agent_pause( 'agent_pause' === $action );
+	} elseif ( 'agent_site_check_in' === $action ) {
+		$result = agent_site_check_in( $input['connection_user_id'] ?? null );
 	} elseif ( 'agent_sync' === $action ) {
 		$result = agent_sync();
 	} elseif ( 'connect' === $action ) {
@@ -209,12 +230,15 @@ function admin_page() {
 		delete_transient( 'sunrise_notice_' . get_current_user_id() );
 	}
 	agent_environment_form();
+	$other_connections = other_connections_section();
 	if ( agent_url() && ( ! agent_state() || ! empty( agent_state()['revoked'] ) || ! agent_service_matches( agent_state() ) ) && ! is_wp_error( installation_guard() ) ) {
-		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Until connected, Sunrise sends no inventory or error reports.', 'sunrise' ) . '</p>';
+		if ( $other_connections ) { echo '<details class="sunrise-advanced"><summary>' . esc_html__( 'Connect your administrator separately', 'sunrise' ) . '</summary>'; }
+		echo '<section class="sunrise-connect-card"><h2>' . esc_html__( 'Connect this site', 'sunrise' ) . '</h2><p>' . esc_html__( 'Connect this administrator to Sunrise to report available updates and manage the network. Connections belong to individual WordPress administrators. Other administrators can remain connected and continue reporting.', 'sunrise' ) . '</p>';
 		if ( ! empty( agent_state()['revoked'] ) ) { echo '<p>' . esc_html__( 'This connection was disconnected. Reconnect to choose a network again.', 'sunrise' ) . '</p>'; }
 		if ( agent_state() && ! agent_service_matches( agent_state() ) ) { echo '<p>' . esc_html__( 'The Control address changed. Authenticate again to connect to the selected environment. Your previous site record and history remain in the previous environment.', 'sunrise' ) . '</p>'; }
 		connection_form(); echo '</section>';
-		if ( agent_state() ) { diagnostic_log_section(); }
+		if ( $other_connections ) { echo '</details>'; }
+		diagnostic_log_section();
 		echo '</div>';
 		return;
 	}

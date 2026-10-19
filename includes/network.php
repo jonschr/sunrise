@@ -114,7 +114,7 @@ function managed_network_page() {
 	$identity_error = is_wp_error( installation_guard() );
 	$recovering = $identity_error || ! empty( $state['reconnect'] );
 	$values = array(
-		__( 'Owned by', 'sunrise' ) => wp_get_current_user()->display_name,
+		__( 'Owned by', 'sunrise' ) => wp_get_current_user()->display_name . ' (' . wp_get_current_user()->user_login . ')',
 		__( 'Site', 'sunrise' ) => home_url( '/' ),
 		__( 'Status', 'sunrise' ) => ! empty( $state['reconnect'] ) ? __( 'Waiting for approval in Sunrise Control', 'sunrise' ) : ( $identity_error ? __( 'Reconnection required', 'sunrise' ) : ( ! empty( $state['revoked'] ) ? __( 'Connection revoked — reconnect', 'sunrise' ) : ( ! empty( $state['paused'] ) ? __( 'Connected; managed automatic updates paused', 'sunrise' ) : __( 'Connected', 'sunrise' ) ) ) ),
 		__( 'Last successful check-in', 'sunrise' ) => $last,

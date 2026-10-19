@@ -13,14 +13,14 @@ foreach ( $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->optio
 $cron = get_option( 'cron' ); $owner = get_current_user_id(); $other_admin = 0;
 $anchor_path = WP_CONTENT_DIR . '/sunrise-installation.php'; $anchor = file_exists( $anchor_path ) ? file_get_contents( $anchor_path ) : null;
 $native_updates = get_site_option( 'auto_update_plugins' );
-$verification = 'valid'; $assignment_generation = 1;
+$verification = 'valid'; $assignment_generation = 1; $shared_work = false;
 $requests = array(); $approved = false; $offline = false; $expired = false; $always_expired = false; $missing = false;
 $enrollment_id = wp_generate_uuid4(); $new_site = wp_generate_uuid4(); $account = wp_generate_uuid4(); $network = wp_generate_uuid4();
 function restart_check( $ok, $message ) { if ( ! $ok ) { throw new RuntimeException( $message ); } WP_CLI::line( 'PASS: ' . $message ); }
 $decision = array( 'revision' => '1', 'specificity' => 0 );
 $document = array( 'schema_version' => 2, 'generation' => 1, 'policy' => array( 'site' => 'inherit', 'core' => 'off', 'plugins' => array(), 'themes' => array() ), 'category_defaults' => array( 'plugins' => 'off', 'themes' => 'off' ), 'decisions' => array( 'core' => $decision, 'category_defaults' => array( 'plugins' => $decision, 'themes' => $decision ), 'plugins' => array(), 'themes' => array() ) );
 $wire = array( 'generation' => 1, 'document_json' => wp_json_encode( $document ), 'hash' => hash( 'sha256', wp_json_encode( $document ) ) );
-$mock = function ( $pre, $args, $url ) use ( &$verification, &$assignment_generation, &$requests, &$approved, &$offline, &$expired, &$always_expired, &$missing, $enrollment_id, $new_site, $account, $network, $wire ) {
+$mock = function ( $pre, $args, $url ) use ( &$shared_work, &$verification, &$assignment_generation, &$requests, &$approved, &$offline, &$expired, &$always_expired, &$missing, $enrollment_id, $new_site, $account, $network, $wire ) {
 	$requests[] = array( 'url' => $url, 'method' => $args['method'], 'authorization' => $args['headers']['Authorization'] ?? null, 'body' => json_decode( $args['body'] ?? '', true ) );
 	if ( $offline ) { return new WP_Error( 'fixture_offline' ); }
  if ( Sunrise\agent_url() . '/v1/agent/connection' === $url ) {
@@ -35,7 +35,7 @@ $mock = function ( $pre, $args, $url ) use ( &$verification, &$assignment_genera
 		if ( $missing ) { $missing = false; return array( 'response' => array( 'code' => 401 ), 'headers' => array(), 'body' => '{"error":{"code":"invalid_credential"}}' ); }
 		if ( $expired || $always_expired ) { $expired = false; return array( 'response' => array( 'code' => 410 ), 'headers' => array(), 'body' => '{"error":{"code":"enrollment_expired"}}' ); }
 		$body = $approved ? array( 'status' => 'approved', 'site_id' => $new_site, 'account_id' => $account, 'network_id' => $network, 'generation' => $assignment_generation ) : array( 'status' => 'pending' );
-	} elseif ( Sunrise\agent_url() . '/v1/agent/check-in' === $url ) { $body = array( 'receipt_sequence' => end( $requests )['body']['sequence'], 'policy' => $wire ); }
+	} elseif ( Sunrise\agent_url() . '/v1/agent/check-in' === $url ) { $body = array( 'receipt_sequence' => end( $requests )['body']['sequence'], 'policy' => $wire, 'work_available' => $shared_work, 'update_jobs' => $shared_work ); }
 	elseif ( false !== strpos( $url, '/jonschr/sunrise/releases/latest/download/update.json' ) ) { $body = array( 'name' => 'Sunrise', 'version' => Sunrise\VERSION, 'download_url' => 'https://github.com/jonschr/sunrise/releases/download/v' . Sunrise\VERSION . '/sunrise.zip' ); }
 	else { return new WP_Error( 'unexpected_fixture_http' ); }
 	return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( $body ) );
@@ -49,15 +49,58 @@ try {
 	Sunrise\agent_store_states( array() ); delete_option( 'sunrise_remote_job_fence' );
 	$id = wp_generate_uuid4(); Sunrise\installation_write_anchor( $id );
 	$identity = array_merge( array( 'id' => $id, 'review' => false, 'anchor_required' => true ), Sunrise\installation_markers( $id ) ); update_option( 'sunrise_installation', $identity, false );
+ $recent = array( 'first_at' => time(), 'last_at' => time(), 'count' => 1, 'details' => array() );
+ update_option( 'sunrise_agent_log', array(
+  array_merge( $recent, array( 'user_id' => $owner, 'event' => 'current_admin_diagnostic' ) ),
+  array_merge( $recent, array( 'user_id' => PHP_INT_MAX, 'event' => 'other_admin_private_diagnostic', 'details' => array( 'site_id' => 'other-admin-connection' ) ) ),
+  array_merge( $recent, array( 'user_id' => $owner, 'event' => 'expired_admin_diagnostic', 'last_at' => time() - 15 * DAY_IN_SECONDS ) ),
+ ), false );
+ ob_start(); Sunrise\admin_page(); $unconnected_html = ob_get_clean();
+ restart_check( false !== strpos( $unconnected_html, 'Copy diagnostic log' ) && false !== strpos( $unconnected_html, 'current_admin_diagnostic' ), 'An administrator with no connection can read and copy diagnostics' );
+ $diagnostics = Sunrise\agent_diagnostic_log();
+ restart_check( $owner === $diagnostics['administrator_id'] && array() === $diagnostics['connections'] && array( 'other_admin_private_diagnostic', 'current_admin_diagnostic' ) === array_column( $diagnostics['events'], 'event' ), 'Unconnected diagnostics identify the current administrator, share recent site events and exclude expired events' );
+ restart_check( false !== strpos( $unconnected_html, 'other-admin-connection' ) && false !== strpos( $unconnected_html, 'other_admin_private_diagnostic' ), 'Every administrator can copy the complete recent site diagnostic history' );
+ wp_set_current_user( 0 ); ob_start(); Sunrise\admin_page(); $anonymous_html = ob_get_clean(); wp_set_current_user( $owner );
+ restart_check( '' === $anonymous_html, 'Diagnostic visibility does not bypass administrator authorization' );
 	$old = array( 'control_url' => Sunrise\agent_url(), 'url' => Sunrise\installation_site_url(), 'user_id' => $owner, 'sequence' => 12, 'site_id' => wp_generate_uuid4(), 'enrollment_id' => wp_generate_uuid4(), 'account_id' => $account, 'network_id' => $network, 'generation' => 2 );
 	$old['secret'] = Sunrise\credential( str_repeat( 'a', 64 ), 'agent|' . $old['url'] . '|' . $owner ); $old['digest'] = hash( 'sha256', str_repeat( 'a', 64 ) );
 	$old['reconnect'] = array( 'site_id' => $old['site_id'], 'generation' => 2, 'enrollment_id' => wp_generate_uuid4(), 'approval_url' => Sunrise\agent_url() . '/?enrollment=stale', 'phrase' => 'stale-code' );
 	Sunrise\agent_store( $old );
+ $revoked = $old; $revoked['revoked'] = true; Sunrise\agent_store( $revoked );
+ ob_start(); Sunrise\admin_page(); $revoked_html = ob_get_clean();
+ restart_check( false !== strpos( $revoked_html, 'This connection was disconnected' ) && false !== strpos( $revoked_html, 'Copy diagnostic log' ), 'A revoked connection retains diagnostic access' );
+ Sunrise\agent_store( $old );
 	$other_admin = wp_insert_user( array( 'user_login' => 'sunrise-restart-' . wp_generate_password( 10, false ), 'user_pass' => wp_generate_password( 40 ), 'role' => 'administrator' ) );
 	if ( is_wp_error( $other_admin ) ) { throw new RuntimeException( 'Could not create administrator fixture.' ); }
 	wp_set_current_user( $other_admin );
+ ob_start(); Sunrise\admin_page(); $other_html = ob_get_clean();
+ restart_check( false !== strpos( $other_html, 'Copy diagnostic log' ) && false !== strpos( $other_html, $old['site_id'] ) && false === strpos( $other_html, $old['secret'] ) && false === strpos( $other_html, $old['digest'] ) && false !== strpos( $other_html, 'current_admin_diagnostic' ), 'An unconnected administrator sees owner diagnostics and events without credentials or digests' );
 	restart_check( is_wp_error( Sunrise\agent_restart_enrollment( true ) ) && ! $requests && $old === Sunrise\agent_states()[ $owner ], 'Another administrator cannot reset the owner connection' );
 	restart_check( 403 === rest_do_request( new WP_REST_Request( 'POST', '/sunrise/v1/agent/reconnect' ) )->get_status() && $old === Sunrise\agent_states()[ $owner ], 'Another administrator cannot repair the owner connection through REST' );
+ $healthy = $old; unset( $healthy['reconnect'] ); $healthy['paused'] = true; Sunrise\agent_store_states( array( $owner => $healthy ) );
+ ob_start(); Sunrise\admin_page(); $shared_html = ob_get_clean();
+ restart_check( false !== strpos( $shared_html, 'Owned by' ) && false !== strpos( $shared_html, get_user_by( 'id', $owner )->user_login ) && false !== strpos( $shared_html, 'agent_site_check_in' ) && false === strpos( $shared_html, 'name="operation" value="agent_reauthenticate"' ) && false === strpos( $shared_html, 'name="operation" value="agent_disconnect"' ), 'Other administrators see the owner and shared check-in but no repair or disconnect controls' );
+ $requests = array(); $shared_work = true; $shared_result = Sunrise\agent_site_check_in( $owner ); $shared_work = false;
+ restart_check( array( 'checked_in' => true ) === $shared_result && $other_admin === get_current_user_id() && ! Sunrise\agent_state() && ! empty( Sunrise\agent_states()[ $owner ]['paused'] ), 'Another administrator checks in the owner connection without taking ownership or clearing its pause' );
+ $check_ins = array_values( array_filter( $requests, function ( $request ) { return false !== strpos( $request['url'], '/v1/agent/check-in' ); } ) );
+ restart_check( count( $check_ins ) >= 1 && true === $check_ins[0]['body']['local_pause'] && ! array_filter( $requests, function ( $request ) { return false !== strpos( $request['url'], '/agent/jobs' ) || false !== strpos( $request['url'], '/enrollments' ); } ), 'Shared check-in reports the owner pause and never claims work or enrolls' );
+ $requests = array(); Sunrise\agent_store_states( array( $owner => $old ) );
+ restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && ! $requests && $other_admin === get_current_user_id() && $old === Sunrise\agent_states()[ $owner ], 'Shared check-in cannot start pending connection repair and always restores the requesting administrator' );
+ $blocked = $healthy; $blocked['revoked'] = true; Sunrise\agent_store_states( array( $owner => $blocked ) );
+ restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && ! $requests && is_wp_error( Sunrise\agent_site_check_in( array( $owner ) ) ) && is_wp_error( Sunrise\agent_site_check_in( 0 ) ), 'Revoked, malformed and missing shared targets are rejected without HTTP' );
+ Sunrise\agent_store_states( array( $owner => $healthy ) );
+ add_filter( 'salt', $salt ); restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && ! $requests, 'Shared check-in never repairs an installation identity mismatch' ); remove_filter( 'salt', $salt ); update_option( 'sunrise_installation', $identity, false );
+ wp_set_current_user( 0 ); restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && array() === Sunrise\agent_diagnostic_log() && ! $requests && 0 === get_current_user_id(), 'Anonymous callers cannot delegate a check-in or read site diagnostics' ); wp_set_current_user( $other_admin );
+ Sunrise\agent_store_states( array( $owner => $healthy ) );
+ $offline = true; restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && $other_admin === get_current_user_id() && $healthy['secret'] === Sunrise\agent_states()[ $owner ]['secret'], 'A transport failure restores the requesting administrator and preserves the owner credential' ); $offline = false; $requests = array();
+ $no_owner_updates = function ( $caps, $required, $args, $user ) use ( $owner ) { if ( (int) $user->ID === $owner ) { $caps['update_plugins'] = false; } return $caps; };
+ add_filter( 'user_has_cap', $no_owner_updates, 10, 4 );
+ try { restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && ! $requests && $other_admin === get_current_user_id(), 'A connection owner who lost update capabilities cannot be used for delegated check-in' ); } finally { remove_filter( 'user_has_cap', $no_owner_updates, 10 ); }
+ get_user_by( 'id', $other_admin )->set_role( 'editor' ); wp_set_current_user( 0 ); wp_set_current_user( $other_admin );
+ restart_check( is_wp_error( Sunrise\agent_site_check_in( $owner ) ) && array() === Sunrise\agent_diagnostic_log() && ! $requests, 'An editor cannot copy site diagnostics or trigger a shared check-in' );
+ get_user_by( 'id', $other_admin )->set_role( 'administrator' ); wp_set_current_user( 0 ); wp_set_current_user( $other_admin );
+ Sunrise\agent_store_states( array( $owner => $old ) ); $requests = array();
+
 	wp_set_current_user( $owner );
 	restart_check( is_wp_error( Sunrise\agent_restart_enrollment() ) && ! $requests && $old === Sunrise\agent_state(), 'A new connection requires explicit confirmation' );
 	WP_Upgrader::create_lock( 'sunrise_agent', 120 ); restart_check( is_wp_error( Sunrise\agent_restart_enrollment( true ) ) && $old === Sunrise\agent_state(), 'Concurrent connection work blocks reset' ); WP_Upgrader::release_lock( 'sunrise_agent' );

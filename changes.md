@@ -4,7 +4,8 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
-No pending changes.
+- Let every WordPress administrator view and copy sanitized diagnostics for all site connections, including disconnected connections, with owner names and WordPress user IDs.
+- Show who owns each connection and offer Check in now to other administrators. These shared check-ins report inventory and acknowledge policy without running installations or connection repair; only the owner can reconnect, replace credentials or disconnect. Keep local pauses, owner capabilities, connection locks and normal background behavior.
 
 ## 0.3.31 — 2026-10-18
 
