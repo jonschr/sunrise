@@ -6,6 +6,13 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 No pending changes.
 
+## 0.3.31 — 2026-10-18
+
+- Show one primary connection action for the current state; move credential replacement, separate-site enrollment and disconnect into clearly explained advanced controls.
+- Verify and retain a working existing site credential during same-site recovery without another Control approval. Unreadable or rejected credentials still require approval; outages retain the original credential.
+- Keep pending connection pages checking for approval, then send the first check-in automatically. Treat waiting for approval as a pending state rather than a failed check-in.
+- Report the actual hourly routine cadence in Site Settings.
+
 ## 0.3.30 — 2026-10-18
 
 - Redact standalone API keys, bearer credentials, JWTs and Sunrise credentials from fatal messages, including retained diagnostics before upload.

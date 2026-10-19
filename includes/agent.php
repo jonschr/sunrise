@@ -156,8 +156,8 @@ function agent_http( $path, $data, $state, $method = 'POST', $identity_required 
 	return $body;
 }
 
-/** Rotate a credential only after Control approves the existing site record. */
-function agent_reconnect( $state, $renew_expired = true ) {
+/** Keep a working credential; replacement credentials still require Control approval. */
+function agent_reconnect( $state, $renew_expired = true, $replace = false ) {
 	require_once __DIR__ . '/controller.php';
 	if ( ! agent_service_matches( $state ) ) { return new \WP_Error( 'sunrise_agent_environment', 'The Control address changed. Connect this site to the selected environment.' ); }
 	if ( ! agent_reconnectable( $state ) || empty( $state['site_id'] ) || empty( $state['generation'] ) || empty( $state['account_id'] ) || empty( $state['network_id'] ) ) {
@@ -165,6 +165,21 @@ function agent_reconnect( $state, $renew_expired = true ) {
 		return new \WP_Error( 'sunrise_identity_review', 'This installation changed. Review its identity in Sunrise before reconnecting.', array( 'status' => 409 ) );
 	}
 	if ( empty( $state['reconnect'] ) ) {
+		if ( ! $replace ) {
+			$verified = agent_http( 'agent/connection', (object) array(), $state, 'POST', false );
+			if ( ! is_wp_error( $verified ) ) {
+				foreach ( array( 'account_id', 'network_id', 'site_id', 'generation' ) as $key ) {
+					if ( ! isset( $verified[ $key ] ) || $verified[ $key ] !== $state[ $key ] ) { return new \WP_Error( 'sunrise_connection_mismatch', 'Control did not confirm this connection. Contact support before replacing it.' ); }
+				}
+				if ( ! isset( $verified['site_url'] ) || untrailingslashit( $verified['site_url'] ) !== $state['url'] ) { return new \WP_Error( 'sunrise_connection_mismatch', 'Control did not confirm this site URL. Contact support before replacing it.' ); }
+				$confirmed = agent_confirm_installation();
+				if ( ! is_wp_error( $confirmed ) ) { agent_log( 'connection_verified', array( 'site_id' => $state['site_id'], 'generation' => $state['generation'] ) ); }
+				return $confirmed;
+			}
+			$data = $verified->get_error_data();
+			// Outages and throttling must not discard a credential that may still be valid.
+			if ( 'sunrise_credential_invalid' !== $verified->get_error_code() && ( ! is_array( $data ) || ! in_array( $data['status'] ?? null, array( 401, 404, 410 ), true ) ) ) { return $verified; }
+		}
 		$secret = bin2hex( random_bytes( 32 ) );
 		$encrypted = credential( $secret, 'agent|' . $state['url'] . '|' . $state['user_id'] );
 		if ( is_wp_error( $encrypted ) ) { return $encrypted; }
@@ -199,7 +214,7 @@ function agent_reconnect( $state, $renew_expired = true ) {
 		}
 		return $assignment;
 	}
-	if ( 'approved' !== ( $assignment['status'] ?? null ) ) { agent_log( 'recovery_waiting_for_approval', array( 'enrollment_id' => $state['reconnect']['enrollment_id'] ) ); return new \WP_Error( 'sunrise_reconnect_pending', 'Approve this reconnection in Sunrise Control.', array( 'status' => 202 ) ); }
+	if ( 'approved' !== ( $assignment['status'] ?? null ) ) { agent_log( 'recovery_waiting_for_approval', array( 'enrollment_id' => $state['reconnect']['enrollment_id'] ) ); return new \WP_Error( 'sunrise_reconnect_pending', 'Waiting for approval in Sunrise Control.', array( 'status' => 202, 'approval_url' => $state['reconnect']['approval_url'] ?? null, 'phrase' => $state['reconnect']['phrase'] ?? null ) ); }
 	if ( $assignment['site_id'] !== $state['reconnect']['site_id'] || (int) $assignment['generation'] <= $state['reconnect']['generation']
 		|| $assignment['account_id'] !== $state['account_id'] || $assignment['network_id'] !== $state['network_id'] ) {
 		agent_log( 'recovery_assignment_rejected', array( 'expected_site_id' => $state['reconnect']['site_id'], 'received_site_id' => $assignment['site_id'] ?? null, 'base_generation' => (int) $state['reconnect']['generation'], 'received_generation' => isset( $assignment['generation'] ) ? (int) $assignment['generation'] : null ) );
@@ -214,7 +229,7 @@ function agent_reconnect( $state, $renew_expired = true ) {
 	return true;
 }
 
-/** Called only after Control approves replacement credentials for this same installation. */
+/** Release same-site review after Control verifies the existing key or approves its replacement. */
 function agent_confirm_installation() {
 	$identity = installation_identity();
 	if ( ! installation_anchor() && ! installation_write_anchor( $identity['id'] ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not restore the installation identity.' ); }
@@ -377,8 +392,8 @@ function agent_maybe_request_check_in() {
 			if ( is_wp_error( $result ) ) {
 				$retry = $result->get_error_data(); $wait = is_array( $retry ) ? max( $interval, (int) ( $retry['retry_after'] ?? 0 ) ) : $interval;
 				set_transient( $key, array( 'retry_at' => time() + $wait ), $wait );
-				agent_log( 'traffic_check_in_failed', array_merge( array( 'mode' => $recovery ? 'recovery' : 'overdue' ), agent_error_details( $result ) ) );
-				if ( $recovery ) { $errors[ $user_id ] = array( 'code' => $result->get_error_code(), 'at' => time() ); }
+				agent_log( agent_connection_pending( $result ) ? 'traffic_check_in_pending' : 'traffic_check_in_failed', array_merge( array( 'mode' => $recovery ? 'recovery' : 'overdue' ), agent_error_details( $result ) ) );
+				if ( $recovery && ! agent_connection_pending( $result ) ) { $errors[ $user_id ] = array( 'code' => $result->get_error_code(), 'at' => time() ); } else { unset( $errors[ $user_id ] ); }
 			} else { agent_log( 'traffic_check_in_succeeded', array( 'mode' => $recovery ? 'recovery' : 'overdue' ) ); unset( $errors[ $user_id ] ); }
 			if ( $errors ) { update_option( 'sunrise_reconnect_errors', $errors, false ); } else { delete_option( 'sunrise_reconnect_errors' ); }
 			$attempted = true;
@@ -770,23 +785,45 @@ function agent_restart_enrollment( $confirmed = false ) {
 	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
+/** Pending human approval is a connection state, not a failed check-in. */
+function agent_connection_pending( $result ) {
+	return is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'sunrise_reconnect_pending', 'sunrise_approval_pending' ), true );
+}
+
 /** Acknowledge a newly received policy now, rather than waiting for the next routine report. */
 function agent_sync() {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	$result = agent_synchronize();
-	agent_log( is_wp_error( $result ) ? 'manual_check_in_failed' : 'manual_check_in_succeeded', is_wp_error( $result ) ? agent_error_details( $result ) : array() );
+	agent_log( agent_connection_pending( $result ) ? 'manual_check_in_pending' : ( is_wp_error( $result ) ? 'manual_check_in_failed' : 'manual_check_in_succeeded' ), is_wp_error( $result ) ? agent_error_details( $result ) : array() );
 	return $result;
 }
 
+/** Browser recovery starts or resumes the same request; success includes its first real report. */
+function agent_connection_recover() {
+	$state = agent_state();
+	if ( ! empty( $state['site_id'] ) && empty( $state['reconnect'] ) && ! is_wp_error( installation_guard() ) ) {
+		$result = agent_sync();
+		return is_wp_error( $result ) ? $result : array( 'status' => 'connected' );
+	}
+	$result = agent_reauthenticate( false );
+	if ( agent_connection_pending( $result ) ) {
+		$pending = agent_state()['reconnect'];
+		return array( 'status' => 'pending', 'approval_url' => $pending['approval_url'], 'phrase' => $pending['phrase'] );
+	}
+	if ( is_wp_error( $result ) ) { return $result; }
+	$result = agent_sync();
+	return is_wp_error( $result ) ? $result : array( 'status' => 'connected' );
+}
+
 /** Start a fresh Control credential while retaining this approved site record. */
-function agent_reauthenticate() {
+function agent_reauthenticate( $replace = true ) {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		$state = agent_state();
 		if ( empty( $state['site_id'] ) ) { return new \WP_Error( 'sunrise_not_enrolled', 'Connect this site first.' ); }
-		$result = agent_reconnect( $state );
+		$result = agent_reconnect( $state, true, $replace );
 		if ( ! is_wp_error( $result ) || 'sunrise_reconnect_pending' === $result->get_error_code() ) { agent_schedule( 60 ); }
 		return $result;
 	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
@@ -845,7 +882,7 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 		// WP-Cron removes a single event before invoking it; reserve its successor before work that may stop the request.
 		agent_schedule( AGENT_INTERVAL );
 		$result = agent_synchronize( $routine );
-		agent_log( is_wp_error( $result ) ? 'scheduled_check_in_failed' : 'scheduled_check_in_succeeded', is_wp_error( $result ) ? agent_error_details( $result ) : array() );
+		agent_log( agent_connection_pending( $result ) ? 'scheduled_check_in_pending' : ( is_wp_error( $result ) ? 'scheduled_check_in_failed' : 'scheduled_check_in_succeeded' ), is_wp_error( $result ) ? agent_error_details( $result ) : array() );
 		$delay = AGENT_INTERVAL;
 		if ( is_wp_error( $result ) ) {
 			$data = $result->get_error_data();

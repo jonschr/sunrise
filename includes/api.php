@@ -24,6 +24,7 @@ function enrollment_permission() {
 
 function register_routes() {
 	register_rest_route( 'sunrise/v1', '/agent/connect', array( 'methods' => 'POST', 'callback' => function () { return agent_enroll( bin2hex( random_bytes( 32 ) ) ); }, 'permission_callback' => __NAMESPACE__ . '\\enrollment_permission' ) );
+	register_rest_route( 'sunrise/v1', '/agent/reconnect', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_connection_recover', 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	register_rest_route( 'sunrise/v1', '/wake', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_wake', 'permission_callback' => __NAMESPACE__ . '\\agent_wake_permission' ) );
 	register_rest_route( 'sunrise/v1', '/agent/check-in', array( 'methods' => 'POST', 'callback' => __NAMESPACE__ . '\\agent_sync', 'permission_callback' => __NAMESPACE__ . '\\permission' ) );
 	register_rest_route( 'sunrise/v1', '/controller/refresh/(?P<id>[a-f0-9]{16})', array( 'methods' => 'POST', 'callback' => function ( $request ) {

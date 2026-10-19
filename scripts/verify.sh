@@ -2,6 +2,7 @@
 # The same mandatory checks run before every tagged package is published.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+node --test tests/connection-ui.test.mjs
 find . -name '*.php' -not -path './.git/*' -not -path './dist/*' -print0 | xargs -0 -n1 php -l
 php tests/control-origin-check.php
 php tests/error-diagnostics-check.php

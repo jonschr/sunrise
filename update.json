@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.30",
+  "version": "0.3.31",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.30/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.31/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Redact credentials from fatal diagnostics, retry recovery every five minutes while preserving hourly routine check-ins and server backoff, and coordinate native WordPress installations with Sunrise workers through the shared execution lock. Conflicting work defers without a failed-update record."
+    "changelog": "Simplify connection controls; verify and retain working same-site credentials without another approval. Keep waiting pages checking and finish the first check-in automatically after replacement-key approval. Show the actual hourly routine cadence."
   }
 }
