@@ -7,6 +7,7 @@ Sunrise\installation_write_anchor( $identity );
 update_option( 'sunrise_installation', array_merge( array( 'id' => $identity, 'review' => false, 'anchor_required' => true ), Sunrise\installation_markers( $identity ) ), false );
 $secret = bin2hex( random_bytes( 32 ) );
 $state = array( 'user_id' => $owner, 'url' => Sunrise\installation_site_url(), 'control_url' => Sunrise\agent_url(), 'enrollment_id' => wp_generate_uuid4(), 'site_id' => wp_generate_uuid4(), 'account_id' => wp_generate_uuid4(), 'network_id' => wp_generate_uuid4(), 'sequence' => 0, 'generation' => 1, 'secret' => Sunrise\credential( $secret, 'agent|' . Sunrise\installation_site_url() . '|' . $owner ), 'digest' => hash( 'sha256', $secret ), 'paused' => false, 'last_success' => time() );
+$state['phrase'] = 'fixture-approval-phrase';
 $document = array( 'schema_version' => 2, 'generation' => 1, 'policy' => array( 'site' => 'inherit', 'core' => 'off', 'plugins' => array(), 'themes' => array() ), 'category_defaults' => array( 'plugins' => 'off', 'themes' => 'off' ) );
 $decision = array( 'revision' => '1', 'specificity' => 1 );
 $document['decisions'] = array( 'core' => $decision, 'plugins' => array(), 'themes' => array(), 'category_defaults' => array( 'plugins' => $decision, 'themes' => $decision ) );
