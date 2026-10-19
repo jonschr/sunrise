@@ -153,7 +153,7 @@ function run_job( $id ) {
 		return job_error( 'busy', __( 'A Sunrise worker is already running.', 'sunrise' ) );
 	}
 	$previous_user = get_current_user_id();
-	$auto_lock = false;
+	$auto_lock = false; $file = null;
 	$started = false;
 	$buffer_level = ob_get_level();
 	// wp_version_check() can start unrelated automatic updates when called during cron.
@@ -162,6 +162,10 @@ function run_job( $id ) {
 		remove_action( 'wp_maybe_auto_update', 'wp_maybe_auto_update', $native_auto_priority );
 	}
 	try {
+		require_once __DIR__ . '/execution-lock.php';
+		$file = agent_execution_lock();
+		if ( is_wp_error( $file ) ) { wp_schedule_single_event( time() + 60, 'sunrise_run_job', array( $id ) ); return $file; }
+		$GLOBALS['sunrise_execution_active'] = true;
 		$job = get_option( 'sunrise_job_' . $id );
 		if ( ! $job || 'queued' !== $job['status'] ) {
 			return;
@@ -219,6 +223,8 @@ function run_job( $id ) {
 		if ( $auto_lock ) {
 			\WP_Upgrader::release_lock( 'auto_updater' );
 		}
+		unset( $GLOBALS['sunrise_execution_active'] );
+		if ( is_resource( $file ) ) { flock( $file, LOCK_UN ); fclose( $file ); }
 		\WP_Upgrader::release_lock( 'sunrise_worker' );
 		wp_set_current_user( $previous_user );
 		if ( false !== $native_auto_priority ) {

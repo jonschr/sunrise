@@ -47,6 +47,9 @@ function manual_update_begin( $context, $new_run = false ) {
 	if ( ! $context ) { return null; }
 	list( $upgrader, $type, $id, $version ) = $context;
 	if ( ! current_user_can( 'update_' . ( 'core' === $type ? 'core' : $type . 's' ) ) || ! is_string( $id ) || ! $id || strlen( $id ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $id ) || ! is_string( $version ) || ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $version ) ) { return null; }
+	$GLOBALS['sunrise_manual_observing'] = true;
+	try { $lock = native_update_execution_lock( null ); } finally { $GLOBALS['sunrise_manual_observing'] = false; }
+	if ( is_wp_error( $lock ) ) { return null; }
 	$key = spl_object_id( $upgrader );
 	$active = $GLOBALS['sunrise_manual_updates'][ $key ] ?? null;
 	if ( $active && $active['event']['installed_id'] === $id && $active['event']['version'] === $version && ! ( $new_run && ! empty( $active['entered_run'] ) ) ) { if ( $new_run ) { $GLOBALS['sunrise_manual_updates'][ $key ]['entered_run'] = true; } return $key; }

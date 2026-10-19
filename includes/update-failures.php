@@ -42,6 +42,7 @@ function capture_automatic_update_failures( $results ) {
 			$id = 'core' === $type ? 'wordpress' : ( isset( $result->item->$type ) ? $result->item->$type : '' );
 			$version = 'core' === $type && isset( $result->item->current ) ? $result->item->current : ( isset( $result->item->new_version ) ? $result->item->new_version : '' );
 			if ( ! is_string( $id ) || ! $id || strlen( $id ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $id ) || ! is_string( $version ) || ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $version ) ) { continue; }
+			if ( is_wp_error( $result->result ) && in_array( 'sunrise_execution_busy', $result->result->get_error_codes(), true ) ) { continue; }
 			$key = $type . ':' . $id;
 			$success = $result->result && ! is_wp_error( $result->result );
 			$activity[] = array( 'id' => wp_generate_uuid4(), 'type' => $type, 'installed_id' => $id, 'version' => $version, 'status' => $success ? 'succeeded' : 'failed', 'code' => $success ? 'updated' : automatic_failure_reason( $result->result ), 'updated_at' => time() );

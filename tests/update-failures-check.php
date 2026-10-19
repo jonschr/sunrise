@@ -7,6 +7,9 @@ try {
  delete_option( 'sunrise_automatic_update_failures' );
  delete_option( 'sunrise_automatic_update_activity' );
  $item = (object) array( 'plugin' => 'fixture/fixture.php', 'new_version' => '2.0' );
+ $busy = new WP_Error( 'sunrise_execution_busy', 'Another installer is active.' ); $busy->add( 'download_failed', 'Native wrapper' );
+ Sunrise\capture_automatic_update_failures( array( 'plugin' => array( (object) array( 'item' => $item, 'result' => $busy ) ) ) );
+ $check( ! get_option( 'sunrise_automatic_update_failures' ) && ! Sunrise\automatic_update_activity(), 'A native lock deferral must not become a failed-version guard or installation failure' );
  $result = (object) array( 'item' => $item, 'result' => new WP_Error( 'download_failed', 'License expired: secret-key https://provider.test/?key=secret' ) );
  require_once dirname( __DIR__ ) . '/includes/agent-jobs.php';
  require_once dirname( __DIR__ ) . '/includes/jobs.php';

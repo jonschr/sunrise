@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Sunrise
  * Description: Authenticated site update management and monitoring.
- * Version: 0.3.29
+ * Version: 0.3.30
  * Plugin URI: https://github.com/jonschr/sunrise
  * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
@@ -16,7 +16,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.3.29';
+const VERSION = '0.3.30';
 
 // Discard old cached WordPress.org collisions before the release checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {
@@ -44,6 +44,7 @@ require_once __DIR__ . '/includes/agent-wake.php';
 require_once __DIR__ . '/includes/errors.php';
 require_once __DIR__ . '/includes/update-failures.php';
 require_once __DIR__ . '/includes/manual-updates.php';
+require_once __DIR__ . '/includes/execution-lock.php';
 require_once __DIR__ . '/includes/premium-licenses.php';
 
 add_action( 'deleted_user', function ( $user_id ) {

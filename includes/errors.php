@@ -46,10 +46,19 @@ function error_location( $file ) {
 	return 'outside/unknown';
 }
 
+/** Redact credentials even when another plugin's exception contains no key=value label. */
+function error_redact_secrets( $message ) {
+	$message = preg_replace( '~\b(?:sk|rk)[_-](?:live|test|proj|ant|or)[A-Za-z0-9_-]*|\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+|\bxox[baprs]-[A-Za-z0-9-]+|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{20,}~', '[redacted]', $message );
+	$message = preg_replace( '~\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b~', '[redacted]', $message );
+	$message = preg_replace( '~\b[a-f0-9]{64}\b~i', '[redacted]', $message );
+	$message = preg_replace( '~\b(?:Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+~i', '[redacted]', $message );
+	return preg_replace( '~\b(password|passwd|secret|token|api[_ -]?key|authorization|licen[cs]e(?:[_ -]?key)?)(?:\s+(?:provided|received|value|is|was))*\s*[:=]\s*(?:"[^"]*"|\x27[^\x27]*\x27|[^\s,;]+)~i', '$1=[redacted]', $message );
+}
+
 /** Keep the first message line and code-only frames; never retain trace arguments or objects. */
 function error_diagnostics( $error ) {
 	$raw = isset( $error['message'] ) && is_string( $error['message'] ) ? substr( $error['message'], 0, 65536 ) : '';
-	$message = preg_split( '/[\r\n]/', $raw, 2 )[0];
+	$message = error_redact_secrets( preg_split( '/[\r\n]/', $raw, 2 )[0] );
 	if ( ! empty( $error['file'] ) && is_string( $error['file'] ) ) { $message = str_replace( array( $error['file'], wp_normalize_path( $error['file'] ) ), error_location( $error['file'] ), $message ); }
 	$message = preg_replace( '~\bhttps?://[^\s<>]+~i', '[URL]', $message );
 	$message = preg_replace( '~\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b~i', '[email]', $message );
@@ -85,6 +94,7 @@ function error_summaries() {
 		if ( ! in_array( $group['code'], array( 'fatal', 'parse', 'core', 'compile', 'user_fatal', 'recoverable' ), true ) || ! is_int( $group['line'] ) || $group['line'] < 0 || $group['line'] > 10000000 || ! is_int( $group['count'] ) || $group['count'] < 1 || $group['count'] > 1000000 ) { continue; }
 		if ( strlen( $group['file'] ) > 240 || ! preg_match( '#^(wordpress|plugins|themes|mu-plugins|content|outside)/[A-Za-z0-9_./-]+$#D', $group['file'] ) || false !== strpos( $group['file'], '..' ) || false !== strpos( $group['file'], '//' ) ) { continue; }
 		if ( array_key_exists( 'details', $group ) && ( ! is_array( $group['details'] ) || array_diff( array_keys( $group['details'] ), array( 'message', 'stack_trace', 'trace_truncated' ) ) || ! isset( $group['details']['message'], $group['details']['stack_trace'] ) || ! is_string( $group['details']['message'] ) || strlen( $group['details']['message'] ) > 2000 || ! is_array( $group['details']['stack_trace'] ) || count( $group['details']['stack_trace'] ) > 32 || ( isset( $group['details']['trace_truncated'] ) && ! is_bool( $group['details']['trace_truncated'] ) ) ) ) { continue; }
+		if ( isset( $group['details']['message'] ) ) { $group['details']['message'] = error_redact_secrets( $group['details']['message'] ); }
 		foreach ( $group['details']['stack_trace'] ?? array() as $frame ) {
 			if ( ! is_array( $frame ) || count( $frame ) !== 3 || ! isset( $frame['file'], $frame['line'], $frame['function'] ) || ! is_string( $frame['file'] ) || strlen( $frame['file'] ) > 240 || ! preg_match( '#^(wordpress|plugins|themes|mu-plugins|content|outside)/[A-Za-z0-9_./-]+$#D', $frame['file'] ) || false !== strpos( $frame['file'], '..' ) || false !== strpos( $frame['file'], '//' ) || ! is_int( $frame['line'] ) || $frame['line'] < 0 || $frame['line'] > 10000000 || ! is_string( $frame['function'] ) || strlen( $frame['function'] ) > 200 || ! preg_match( '/^[A-Za-z0-9_\\\\:{}>\-]+$/D', $frame['function'] ) ) { continue 2; }
 		}

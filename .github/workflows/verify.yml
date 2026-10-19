@@ -1,0 +1,49 @@
+name: Verify plugin
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.1', '8.5']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fixture-only-password
+          MYSQL_DATABASE: sunrise_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pfixture-only-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, zip
+          tools: wp-cli:2.12.0
+          coverage: none
+      - name: Prepare disposable WordPress fixture
+        run: |
+          mkdir "$RUNNER_TEMP/wordpress"
+          wp --path="$RUNNER_TEMP/wordpress" core download --version=6.6
+          wp --path="$RUNNER_TEMP/wordpress" config create --dbname=sunrise_test --dbuser=root --dbpass=fixture-only-password --dbhost=127.0.0.1
+          wp --path="$RUNNER_TEMP/wordpress" config set WP_ENVIRONMENT_TYPE local
+          wp --path="$RUNNER_TEMP/wordpress" config set SUNRISE_TEST_SITE true --raw
+          wp --path="$RUNNER_TEMP/wordpress" config set DISABLE_WP_CRON true --raw
+          wp --path="$RUNNER_TEMP/wordpress" core install --url=http://sunrise-fixture.localhost --title=Fixture --admin_user=fixture --admin_password=fixture-only-password --admin_email=fixture@example.invalid --skip-email
+          ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/wordpress/wp-content/plugins/sunrise"
+          wp --path="$RUNNER_TEMP/wordpress" plugin activate sunrise
+          wp --path="$RUNNER_TEMP/wordpress" --user=1 eval-file tests/seed-ci.php
+      - name: Verify security, recovery, scheduling and native updates
+        run: bash scripts/verify.sh "$RUNNER_TEMP/wordpress"

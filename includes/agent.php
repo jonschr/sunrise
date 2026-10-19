@@ -361,16 +361,22 @@ function agent_maybe_request_check_in() {
 			$overdue = ! empty( $state['site_id'] ) && ! $identity_error
 				&& ( empty( $state['last_success'] ) || $state['last_success'] <= time() - AGENT_INTERVAL );
 			wp_set_current_user( (int) $user_id );
-			if ( $identity_error && ! $recovery ) { agent_log( 'recovery_blocked', agent_installation_diagnostics() ); continue; }
+			if ( $identity_error && ! $recovery ) { if ( ! get_transient( $key ) ) { agent_log( 'recovery_blocked', agent_installation_diagnostics() ); set_transient( $key, time(), 5 * MINUTE_IN_SECONDS ); } continue; }
 			if ( ( ! $recovery && ! $overdue ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { continue; }
-			if ( get_transient( $key ) ) { agent_log( 'traffic_check_in_deferred', array( 'mode' => $recovery ? 'recovery' : 'overdue', 'reason' => 'check_in_interval_throttle' ) ); continue; }
-			set_transient( $key, time(), AGENT_INTERVAL );
+			$interval = $recovery ? 5 * MINUTE_IN_SECONDS : AGENT_INTERVAL;
+			$previous_attempt = get_transient( $key );
+			// Older versions stored only the attempt time; shorten their recovery cooldown on upgrade.
+			$retry_at = is_array( $previous_attempt ) ? (int) $previous_attempt['retry_at'] : (int) $previous_attempt + $interval;
+			if ( $previous_attempt && $retry_at > time() ) { continue; }
+			set_transient( $key, array( 'retry_at' => time() + $interval ), $interval );
 			agent_log( 'traffic_check_in_started', array( 'mode' => $recovery ? 'recovery' : 'overdue' ) );
 			// A due cron event after the traffic fallback is a bonus report, not another routine check.
 			delete_option( 'sunrise_routine_check_in_' . (int) $user_id );
 			$result = agent_check_in( ! $recovery );
 			$errors = get_option( 'sunrise_reconnect_errors', array() );
 			if ( is_wp_error( $result ) ) {
+				$retry = $result->get_error_data(); $wait = is_array( $retry ) ? max( $interval, (int) ( $retry['retry_after'] ?? 0 ) ) : $interval;
+				set_transient( $key, array( 'retry_at' => time() + $wait ), $wait );
 				agent_log( 'traffic_check_in_failed', array_merge( array( 'mode' => $recovery ? 'recovery' : 'overdue' ), agent_error_details( $result ) ) );
 				if ( $recovery ) { $errors[ $user_id ] = array( 'code' => $result->get_error_code(), 'at' => time() ); }
 			} else { agent_log( 'traffic_check_in_succeeded', array( 'mode' => $recovery ? 'recovery' : 'overdue' ) ); unset( $errors[ $user_id ] ); }

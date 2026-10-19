@@ -6,6 +6,13 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 No pending changes.
 
+## 0.3.30 — 2026-10-18
+
+- Redact standalone API keys, bearer credentials, JWTs and Sunrise credentials from fatal messages, including retained diagnostics before upload.
+- Retry connection recovery every five minutes on ordinary traffic while preserving hourly routine check-ins and longer server retry delays. Avoid diagnostic log writes on every deferred visitor request.
+- Coordinate native WordPress plugin, theme, bulk and core installations with Sunrise workers using the shared process lock. Defer conflicting work without recording a failed installation; retain rollback and uncertain-job protection.
+- Require security, recovery, scheduling and native-update fixtures on PHP 7.4, 8.1 and 8.5 before tagged releases can publish.
+
 ## 0.3.29 — 2026-10-17
 
 - Recheck eligible automatic updates immediately after the final queued update is acknowledged and Control confirms the queue is empty. Preserve the hourly cooldown, failed-version exclusions, pauses, worker locks and normal queued-work continuation.

@@ -48,6 +48,7 @@ function agent_run_hourly_updates() {
 	};
 	try {
 		$file = agent_execution_lock(); if ( is_wp_error( $file ) ) { return false; }
+		$GLOBALS['sunrise_execution_active'] = true;
 		if ( time() - (int) get_option( 'sunrise_hourly_update_at', 0 ) < AGENT_INTERVAL || is_wp_error( job_permission( array( 'action' => 'auto_updates' ) ) ) ) { return false; }
 		$state = agent_state();
 		if ( empty( $state['applied'] ) || ! empty( $state['pending_report'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) { return false; }
@@ -81,6 +82,7 @@ function agent_run_hourly_updates() {
 		foreach ( $filters as $type => $filter ) { remove_filter( 'auto_update_' . $type, $filter, PHP_INT_MAX ); }
 		if ( false !== $priority && false === has_action( 'wp_maybe_auto_update', 'wp_maybe_auto_update' ) ) { add_action( 'wp_maybe_auto_update', 'wp_maybe_auto_update', $priority ); }
 		while ( ob_get_level() > $buffer ) { ob_end_clean(); }
+		unset( $GLOBALS['sunrise_execution_active'] );
 		if ( is_resource( $file ) ) { flock( $file, LOCK_UN ); fclose( $file ); }
 		\WP_Upgrader::release_lock( 'sunrise_worker' );
 	}

@@ -2,17 +2,8 @@
 namespace Sunrise;
 defined( 'ABSPATH' ) || exit;
 
-/** Process-held lock, without time expiry. File contains no credentials and is not transferable state. */
-function agent_execution_lock() {
-	$path = WP_CONTENT_DIR . '/.sunrise-execution.php';
-	$handle = @fopen( $path, 'c+' );
-	if ( ! $handle || ! flock( $handle, LOCK_EX | LOCK_NB ) ) {
-		if ( $handle ) { fclose( $handle ); }
-		return new \WP_Error( 'sunrise_execution_busy', 'The execution lock is unavailable. Retry after the running operation finishes.' );
-	}
-	if ( 0 === fstat( $handle )['size'] ) { fwrite( $handle, '<?php exit;' ); fflush( $handle ); @chmod( $path, 0600 ); }
-	return $handle;
-}
+require_once __DIR__ . '/execution-lock.php';
+
 function agent_job_save( &$state, $record ) {
 	$state['remote_job'] = $record;
 	if ( ! agent_store( $state ) ) { throw new \RuntimeException( 'Could not persist execution state' ); }
@@ -75,6 +66,7 @@ function agent_run_update_job() {
 	try {
 		if ( ! ( $worker = \WP_Upgrader::create_lock( 'sunrise_worker' ) ) ) { return job_error( 'busy', 'A local worker is running.' ); }
 		$file = agent_execution_lock(); if ( is_wp_error( $file ) ) { return $file; }
+		$GLOBALS['sunrise_execution_active'] = true;
 		$state = agent_state();
 		if ( empty( $state['site_id'] ) || ! agent_owner_valid( $state ) || is_wp_error( installation_guard() ) ) { return job_error( 'forbidden', 'Reconnect this installation before running jobs.' ); }
 		$fence = get_option( 'sunrise_remote_job_fence', array() );
@@ -160,6 +152,7 @@ function agent_run_update_job() {
 		while ( ob_get_level() > $buffer ) { ob_end_clean(); }
 		if ( false !== $priority ) { add_action( 'wp_maybe_auto_update', 'wp_maybe_auto_update', $priority ); }
 		if ( $auto ) { \WP_Upgrader::release_lock( 'auto_updater' ); }
+		unset( $GLOBALS['sunrise_execution_active'] );
 		if ( is_resource( $file ) ) { flock( $file, LOCK_UN ); fclose( $file ); }
 		if ( $worker ) { \WP_Upgrader::release_lock( 'sunrise_worker' ); }
 		if ( $agent_locked ) { \WP_Upgrader::release_lock( 'sunrise_agent' ); }

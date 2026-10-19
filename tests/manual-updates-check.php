@@ -40,7 +40,25 @@ $reset = function ( $type = 'plugin', $version = '2.0' ) use ( &$zip, $directory
  $archive->addFromString( 'sunrise-manual-fixture/' . ( 'plugin' === $type ? 'plugin.php' : 'style.css' ), 'plugin' === $type ? "<?php\n/* Plugin Name: Manual fixture\nVersion: $version\n*/\n" : "/* Theme Name: Manual fixture\nVersion: $version\n*/\n" ); $archive->close();
 };
 try {
+ require_once dirname( __DIR__ ) . '/includes/execution-lock.php';
+ $reset(); $held = Sunrise\agent_execution_lock(); $check( ! is_wp_error( $held ), 'A running Sunrise worker owns the shared file lock' );
+ try {
+  foreach ( array( 'plugin', 'theme', 'bulk', 'core' ) as $kind ) {
+   $GLOBALS['pagenow'] = 'update.php'; $_REQUEST['action'] = 'plugin' === $kind ? 'upgrade-plugin' : ( 'theme' === $kind ? 'upgrade-theme' : 'update-selected' );
+   ob_start();
+   if ( 'core' === $kind ) {
+    $GLOBALS['pagenow'] = 'update-core.php'; $_REQUEST['action'] = 'do-core-upgrade';
+    ( new Core_Upgrader() )->upgrade( (object) array( 'response' => 'upgrade', 'current' => '99.0', 'packages' => (object) array( 'rollback' => false, 'partial' => false, 'new_bundled' => false, 'no_content' => false, 'full' => 'https://fixture.invalid/manual.zip' ) ), array( 'pre_check_md5' => false ) );
+   } elseif ( 'theme' === $kind ) { ( new Theme_Upgrader( new WP_Ajax_Upgrader_Skin() ) )->upgrade( 'sunrise-manual-fixture' ); }
+   elseif ( 'bulk' === $kind ) { ( new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() ) )->bulk_upgrade( array( $id ) ); }
+   else { ( new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() ) )->upgrade( $id ); }
+   $quiet(); $finish();
+   $check( '1.0' === get_plugin_data( $directory . '/plugin.php', false, false )['Version'] && '1.0' === wp_get_theme( 'sunrise-manual-fixture' )->get( 'Version' ) && ! $rows(), 'Native ' . $kind . ' update defers without file changes or failed-attempt guards while Sunrise is installing' );
+  }
+ } finally { flock( $held, LOCK_UN ); fclose( $held ); }
+ $GLOBALS['pagenow'] = 'update.php'; $_REQUEST['action'] = 'upgrade-plugin';
  $reset(); $upgrader = new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() ); ob_start(); $upgrader->upgrade( $id ); $quiet(); $finish();
+ $contending = Sunrise\agent_execution_lock(); $check( is_wp_error( $contending ), 'A manual installation retains the process lock through bulk completion and rollback' );
  $events = $rows(); $check( 1 === count( $events ) && 'succeeded' === $events[0]['status'] && '2.0' === get_plugin_data( $directory . '/plugin.php', false, false )['Version'], 'Actual dashboard plugin installation is reported once as manual success' );
  list( $first, $cursor ) = Sunrise\manual_update_activity(); $check( array() === Sunrise\manual_update_activity( $cursor )[0] && $first === $rows(), 'Independent cursors acknowledge without consuming another account journal' );
  $reset(); $mode = 'download'; $upgrader = new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() ); ob_start(); $upgrader->upgrade( $id ); $quiet(); $finish();
@@ -69,6 +87,7 @@ try {
  $last['id'] = wp_generate_uuid4(); $last['updated_at'] = time() - 91 * DAY_IN_SECONDS; add_option( 'sunrise_manual_update_' . $last['id'], $last, '', false ); $rows(); $check( false === get_option( 'sunrise_manual_update_' . $last['id'] ), 'Journal cleanup is bounded to 90 days' );
  WP_CLI::success( 'Manual native update telemetry checks passed.' );
 } finally {
+ Sunrise\native_update_execution_unlock();
  $GLOBALS['sunrise_manual_updates'] = array();
  remove_filter( 'pre_http_request', $http ); remove_filter( 'upgrader_pre_download', $download, 20 );
  global $wpdb; foreach ( $wpdb->get_col( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE 'sunrise\\_manual\\_%'" ) as $name ) { delete_option( $name ); }

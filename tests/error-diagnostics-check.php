@@ -25,6 +25,11 @@ if ( isset( $argv[1] ) && 'fatal' === $argv[1] ) {
  sunrise_trace_fixture( 'trace-secret-value' );
  exit;
 }
+foreach ( array( 'sk_live_FAKE_AUDIT_VALUE_123456789', 'sk-proj-FAKE_AUDIT_VALUE_123456789', 'ghp_FAKE_AUDIT_TOKEN_123456789', 'github_pat_FAKE_AUDIT_TOKEN_123456789', 'xoxb-FAKE-AUDIT-123456789', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.fakeSignature', str_repeat( 'a', 64 ) ) as $secret ) {
+ $redacted = \Sunrise\error_diagnostics( array( 'message' => 'Uncaught Exception: Invalid API key provided: ' . $secret ) );
+ check( false === strpos( $redacted['message'], $secret ), 'Standalone credential survived redaction.' );
+}
+check( 'RuntimeException: plugin callback failed' === \Sunrise\error_redact_secrets( 'RuntimeException: plugin callback failed' ), 'Code diagnostic was unnecessarily removed.' );
 $file = WP_PLUGIN_DIR . '/example/main.php';
 $error = array( 'file' => $file, 'line' => 42, 'message' => "Uncaught Error: Call to undefined function example() in $file:42\nStack trace:\n#0 $file(10): Example->run('trace-secret-value')\n#1 {main}" );
 $details = \Sunrise\error_diagnostics( $error );
