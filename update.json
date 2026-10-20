@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.33",
+  "version": "0.3.34",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.33/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.34/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Support reviewed remote plugin deactivation and deletion, verify deactivation before uninstall, protect dependencies and Sunrise, recover interrupted results without repeating destructive operations, and keep inventory fresh during overlapping check-ins."
+    "changelog": "Suppress automatic plugin-update emails only when every reported plugin update succeeds. Preserve normal failure and mixed-result notifications, existing email opt-outs, and update activity reporting."
   }
 }

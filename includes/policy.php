@@ -20,6 +20,16 @@ function filter_automatic_updater_disabled( $disabled ) {
 }
 add_filter( 'automatic_updater_disabled', __NAMESPACE__ . '\\filter_automatic_updater_disabled', PHP_INT_MAX );
 
+/** Keep failure notifications; silence only batches WordPress explicitly reports as all successful. */
+function filter_plugin_update_send_email( $enabled, $update_results ) {
+	if ( ! is_array( $update_results ) || ! $update_results ) { return $enabled; }
+	foreach ( $update_results as $update_result ) {
+		if ( ! is_object( $update_result ) || ! isset( $update_result->result ) || true !== $update_result->result ) { return $enabled; }
+	}
+	return false;
+}
+add_filter( 'auto_plugin_update_send_email', __NAMESPACE__ . '\\filter_plugin_update_send_email', 10, 2 );
+
 function agent_automatic_updater_status() {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 	return array(

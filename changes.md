@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.34 — 2026-10-20
+
+- Suppress WordPress automatic plugin-update emails when every reported plugin update succeeds. Preserve normal notifications for failures, mixed results and unknown outcomes; update reporting in Control is unchanged.
+
 ## 0.3.33 — 2026-10-20
 
 - Reload connection state after acquiring its write lock so overlapping reports cannot overwrite a newer job record. Read fresh native lock ownership before recovery.
