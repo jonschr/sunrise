@@ -22,9 +22,18 @@ add_filter( 'automatic_updater_disabled', __NAMESPACE__ . '\\filter_automatic_up
 
 /** Keep failure notifications; silence only batches WordPress explicitly reports as all successful. */
 function filter_plugin_update_send_email( $enabled, $update_results ) {
-	if ( ! is_array( $update_results ) || ! $update_results ) { return $enabled; }
+	if ( ! $enabled || ! is_array( $update_results ) || ! $update_results ) { return $enabled; }
 	foreach ( $update_results as $update_result ) {
 		if ( ! is_object( $update_result ) || ! isset( $update_result->result ) || true !== $update_result->result ) { return $enabled; }
+	}
+	// WordPress normally clears resolved failure markers while composing the success email we skip.
+	$previous = get_option( 'auto_plugin_theme_update_emails', array() );
+	if ( is_array( $previous ) ) {
+		$remaining = $previous;
+		foreach ( $update_results as $update_result ) {
+			if ( isset( $update_result->item->plugin ) && is_string( $update_result->item->plugin ) ) { unset( $remaining[ $update_result->item->plugin ] ); }
+		}
+		if ( $remaining !== $previous ) { update_option( 'auto_plugin_theme_update_emails', $remaining ); }
 	}
 	return false;
 }

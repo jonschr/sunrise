@@ -44,6 +44,14 @@ try {
  $check( 1 === count( $mail ) && array( 'fail' ) === $types && false !== strpos( $mail[0]['message'], 'Fixture failure/plugin.php' ), 'Failure emails must retain their component details.' );
  $updater->check_email( array( 'plugin' => array( $failure ) ) );
  $check( 1 === count( $mail ), 'Native duplicate-failure notification suppression must remain intact.' );
+ $failures = get_option( 'auto_plugin_theme_update_emails', array() ); $failures['unrelated/plugin.php'] = '3.0'; update_option( 'auto_plugin_theme_update_emails', $failures );
+ $recovered = $result( 'failure/plugin.php', true );
+ $check( false === apply_filters( 'auto_plugin_update_send_email', false, array( $recovered ) ) && $failures === get_option( 'auto_plugin_theme_update_emails' ), 'An existing opt-out must retain its original failure-marker behavior.' );
+ $updater->check_email( array( 'plugin' => array( $recovered ) ) );
+ $failures = get_option( 'auto_plugin_theme_update_emails', array() );
+ $check( 1 === count( $mail ) && ! isset( $failures['failure/plugin.php'] ) && '3.0' === $failures['unrelated/plugin.php'], 'A suppressed success must clear only its previous failure marker without sending mail.' );
+ $updater->check_email( array( 'plugin' => array( $failure ) ) );
+ $check( 2 === count( $mail ), 'A new failure after a successful retry must remain eligible for notification.' );
  $run( array( $success, $failure ) );
  $check( 1 === count( $mail ) && array( 'mixed' ) === $types && false !== strpos( $mail[0]['message'], 'Fixture success/plugin.php' ) && false !== strpos( $mail[0]['message'], 'Fixture failure/plugin.php' ), 'Mixed plugin emails must retain both successes and failures.' );
  $run( array( $success ), array( $result( 'fixture-theme', new WP_Error( 'download_failed', 'Fixture theme failed.' ), 'theme' ) ) );
