@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.32/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.33/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Let all WordPress administrators view connection ownership, copy sanitized diagnostics and request report-only check-ins. Keep repair, credential replacement and disconnect owner-only; preserve pauses, capabilities and background behavior."
+    "changelog": "Support reviewed remote plugin deactivation and deletion, verify deactivation before uninstall, protect dependencies and Sunrise, recover interrupted results without repeating destructive operations, and keep inventory fresh during overlapping check-ins."
   }
 }

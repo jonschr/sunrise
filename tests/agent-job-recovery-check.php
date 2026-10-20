@@ -1,6 +1,7 @@
 <?php
 /** Offline transport simulation; never installs a package or changes the service database. */
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() || ! current_user_can( 'manage_options' ) ) { WP_CLI::error( 'Disposable local administrator required.' ); }
+require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 require_once WP_PLUGIN_DIR . '/sunrise/includes/agent-jobs.php';
 require_once WP_PLUGIN_DIR . '/sunrise/includes/jobs.php';
 $cron = get_option( 'cron' );
@@ -28,12 +29,28 @@ $transport = function ( $pre, $options, $url ) use ( &$reports, &$offline, &$clo
 };
 add_filter( 'pre_http_request', $transport, 10, 3 );
 try {
- $state['remote_job'] = $record; Sunrise\agent_store( $state );
- update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'] ), false );
+ $active = get_option( 'active_plugins' ); $cached = wp_load_alloptions(); $cached['active_plugins'] = maybe_serialize( array( 'stale/plugin.php' ) ); wp_cache_set( 'alloptions', $cached, 'options' ); wp_cache_set( 'active_plugins', array( 'stale/plugin.php' ), 'options' );
+ sunrise_recovery_assert( Sunrise\agent_connection_lock() && get_option( 'active_plugins' ) === $active, 'Writer lock reloads autoloaded activation settings before reporting inventory' ); WP_Upgrader::release_lock( 'sunrise_agent' );
+ $before = Sunrise\agent_states(); $state['remote_job'] = $record; Sunrise\agent_store( $state );
+ wp_cache_set( 'sunrise_agents', $before, 'options' );
+ sunrise_recovery_assert( empty( Sunrise\agent_state()['remote_job'] ), 'Fixture primes connection state cached before another worker committed' );
+ sunrise_recovery_assert( Sunrise\agent_connection_lock() && Sunrise\agent_state()['remote_job'] === $record, 'Owning the connection lock reloads current state instead of overwriting a newer execution record' ); WP_Upgrader::release_lock( 'sunrise_agent' );
+ WP_Upgrader::create_lock( 'sunrise_worker' ); WP_Upgrader::create_lock( 'auto_updater' );
+ $owned_locks = array( 'sunrise_worker' => (int) get_option( 'sunrise_worker.lock' ), 'auto_updater' => (int) get_option( 'auto_updater.lock' ) );
+ update_option( 'sunrise_remote_job_fence', array( 'site_id' => $state['site_id'], 'job_id' => $job['id'], 'locks' => $owned_locks ), false );
  $lock = Sunrise\agent_execution_lock(); if ( is_wp_error( $lock ) ) { throw new RuntimeException( 'File lock unavailable' ); }
- try { sunrise_recovery_assert( is_wp_error( Sunrise\agent_run_update_job() ) && ! $reports, 'Process-held lock blocks recovery even without an unexpired WordPress worker lock' ); }
- finally { flock( $lock, LOCK_UN ); fclose( $lock ); }
+ try { sunrise_recovery_assert( is_wp_error( Sunrise\agent_run_update_job() ) && ! $reports, 'Process-held lock blocks recovery while WordPress worker locks remain active' ); }
+ finally { sunrise_recovery_assert( $owned_locks['sunrise_worker'] === (int) get_option( 'sunrise_worker.lock' ) && $owned_locks['auto_updater'] === (int) get_option( 'auto_updater.lock' ), 'A running process retains all of its expiring locks' ); flock( $lock, LOCK_UN ); fclose( $lock ); }
  sunrise_recovery_assert( is_wp_error( Sunrise\agent_run_update_job() ) && 'result' === Sunrise\agent_state()['remote_job']['phase'], 'Stopped interrupted worker persists its result across a transport outage' );
+ sunrise_recovery_assert( ! get_option( 'sunrise_worker.lock' ) && ! get_option( 'auto_updater.lock' ), 'Stopped-process recovery releases only its recorded expiring locks without waiting an hour' );
+ wp_clear_scheduled_hook( 'sunrise_wake_check_in', array( get_current_user_id() ) );
+ Sunrise\agent_schedule_job_recovery(); $retry = wp_next_scheduled( 'sunrise_wake_check_in', array( get_current_user_id() ) );
+ sunrise_recovery_assert( $retry >= time() + 60 && $retry <= time() + 95, 'A retained receipt retries on the separate wake hook soon' );
+ Sunrise\agent_schedule_job_recovery( new WP_Error( 'limited', 'Retry later', array( 'retry_after' => 7200 ) ) );
+ sunrise_recovery_assert( wp_next_scheduled( 'sunrise_wake_check_in', array( get_current_user_id() ) ) >= time() + 7200, 'Recovery honors a server backoff longer than the routine interval' );
+ $retained = get_option( 'sunrise_remote_job_fence' );
+ WP_Upgrader::create_lock( 'sunrise_worker' ); $foreign = Sunrise\agent_lock_value( 'sunrise_worker' ); $retained['locks']['sunrise_worker'] = $foreign - 1; update_option( 'sunrise_remote_job_fence', $retained, false );
+ sunrise_recovery_assert( is_wp_error( Sunrise\agent_run_update_job() ) && $foreign === (int) get_option( 'sunrise_worker.lock' ), 'Recovery never clears a worker lock that differs from its retained ownership record' ); WP_Upgrader::release_lock( 'sunrise_worker' );
  $reported = json_decode( $reports[0], true );
  sunrise_recovery_assert( 'uncertain' === $reported['status'] && true === $reported['worker_stopped'], 'Recovery reports uncertainty and stopped-worker evidence, never success' );
  sunrise_recovery_assert( ! Sunrise\filter_core( true, 'minor' ) && 'off' === Sunrise\item_policy( 'plugins', 'any/plugin.php' ) && is_wp_error( Sunrise\job_permission( array( 'action' => 'auto_updates' ) ) ), 'Unreconciled installation blocks native automatic selections and legacy installation jobs' );

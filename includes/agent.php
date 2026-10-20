@@ -28,7 +28,7 @@ function agent_set_environment( $environment ) {
 	if ( defined( 'SUNRISE_CONTROL_URL' ) ) { return new \WP_Error( 'sunrise_agent_override', 'The Control address is overridden in wp-config.php.' ); }
 	if ( ! in_array( $environment, array( 'production', 'staging' ), true ) ) { return new \WP_Error( 'sunrise_agent_environment', 'Select production or staging.' ); }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		if ( $environment === get_option( 'sunrise_control_environment', 'production' ) ) { return true; }
 		if ( get_option( 'sunrise_remote_job_fence' ) ) { return new \WP_Error( 'sunrise_job_pending', 'Reconcile the pending update before switching environments.' ); }
@@ -60,6 +60,25 @@ function agent_service_matches( $state ) {
 function agent_owner_valid( $state ) {
 	$user = get_user_by( 'id', $state['user_id'] );
 	return $user && user_can( $user, 'manage_options' ) && user_can( $user, 'update_plugins' ) && user_can( $user, 'update_themes' ) && user_can( $user, 'update_core' );
+}
+
+/** A request can cache connection options before another worker commits. Reload only after owning the writer lock. */
+function agent_connection_lock() {
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	wp_cache_delete( 'sunrise_agent.lock', 'options' ); wp_cache_delete( 'notoptions', 'options' );
+	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return false; }
+	// Active plugins/themes can be autoloaded before this request waits behind an installer.
+	wp_cache_delete( 'alloptions', 'options' );
+	foreach ( array( 'sunrise_agents', 'sunrise_agent', 'sunrise_agent_pause', 'sunrise_agent_revoked', 'sunrise_remote_job_fence', 'sunrise_worker.lock', 'auto_updater.lock', 'active_plugins', 'template', 'stylesheet' ) as $name ) { wp_cache_delete( $name, 'options' ); }
+	wp_cache_delete( 'plugins', 'plugins' );
+	wp_cache_delete( 'notoptions', 'options' );
+	return true;
+}
+
+/** Native lock creation uses a direct INSERT; an earlier absent-option cache must not hide its ownership timestamp. */
+function agent_lock_value( $name ) {
+	wp_cache_delete( $name . '.lock', 'options' ); wp_cache_delete( 'notoptions', 'options' );
+	return (int) get_option( $name . '.lock' );
 }
 
 /** Non-autoloaded state; a WordPress installation normally has only a few connecting administrators. */
@@ -248,7 +267,7 @@ function agent_reconnectable( $state ) {
 
 function agent_enroll( $intent = null ) {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try { return agent_enroll_locked( $intent ); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
@@ -414,7 +433,7 @@ function agent_migrate_schedule() {
 		return;
 	}
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return; }
+	if ( ! agent_connection_lock() ) { return; }
 	try {
 		$states = agent_states();
 		if ( ! agent_store_states( $states ) ) { return; }
@@ -494,11 +513,20 @@ function agent_inventory() {
 	if ( ! $data['capabilities']['file_modifications_allowed'] ) { $restrictions[] = 'file_modifications_disabled'; }
 	$items = array( array( 'type' => 'core', 'installed_id' => 'wordpress', 'version' => $data['core']['version'], 'active' => true,
 		'update_available' => $data['core']['update_available'], 'observed_auto_update' => isset( $data['core']['updates'][0]['auto_update_selected'] ) ? $data['core']['updates'][0]['auto_update_selected'] : null, 'restrictions' => $restrictions ) );
+	require_once __DIR__ . '/plugin-management.php';
+	$management_directories = array_count_values( array_map( 'dirname', array_column( $data['plugins'], 'id' ) ) );
 	foreach ( array( 'plugins', 'themes' ) as $type ) {
 		foreach ( $data[ $type ] as $item ) {
 			$identity = agent_item_identity( $type, $item['id'] );
+			$management_restrictions = $restrictions;
+			if ( 'themes' === $type && ! empty( $item['active_parent'] ) ) { $management_restrictions[] = 'active_parent_theme'; }
+			if ( 'plugins' === $type ) {
+				$guard = plugin_management_target( $item['id'], true, $management_directories );
+				if ( is_wp_error( $guard ) ) { $management_restrictions[] = str_replace( 'sunrise_', '', $guard->get_error_code() ); }
+				if ( ! current_user_can( 'activate_plugins' ) || ! current_user_can( 'delete_plugins' ) ) { $management_restrictions[] = 'plugin_management_forbidden'; }
+			}
 			$items[] = array( 'type' => $type, 'installed_id' => $item['id'], 'version' => $item['version'], 'active' => (bool) $item['active'],
-				'update_available' => $item['update_available'], 'observed_auto_update' => (bool) $item['auto_update_selected'], 'restrictions' => $restrictions, 'identity' => $identity );
+				'update_available' => $item['update_available'], 'observed_auto_update' => (bool) $item['auto_update_selected'], 'restrictions' => $management_restrictions, 'identity' => $identity );
 			if ( null === $identity ) { unset( $items[ count( $items ) - 1 ]['identity'] ); }
 		}
 	}
@@ -613,7 +641,7 @@ function agent_site_profile() {
 
 function agent_check_in( $routine = false, $allow_recovery = true ) {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'A check-in is already running.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'A check-in is already running.' ); }
 	$previous = get_current_user_id();
 	try {
 		$state = agent_state();
@@ -649,6 +677,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 					$state['pending_report']['routine_check_in'] = (bool) $routine;
 					$state['pending_report']['check_in_interval_seconds'] = AGENT_INTERVAL;
 				}
+				if ( ! empty( $state['plugin_management'] ) ) { $state['pending_report']['plugin_management'] = true; }
 				if ( ! empty( $state['php_versions'] ) ) { $state['pending_report']['php_version'] = PHP_VERSION; }
 				if ( ! empty( $state['automatic_updater_supported'] ) ) { $state['pending_report']['automatic_updater'] = agent_automatic_updater_status(); }
 				if ( ! empty( $state['update_failures'] ) ) {
@@ -706,6 +735,8 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		$state['check_in_cadence'] = ! empty( $response['check_in_cadence'] );
 		$state['wake_requests'] = isset( $response['wake_requests'] ) && true === $response['wake_requests'];
 		if ( isset( $state['pending_report']['wake_key'] ) && $state['wake_requests'] ) { $state['wake_registered'] = true; }
+		$management_pending = empty( $state['plugin_management'] ) && ! empty( $response['plugin_management'] );
+		$state['plugin_management'] = ! empty( $response['plugin_management'] );
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
 		if ( isset( $response['failure_checks'] ) && ! validate_failure_checks( $response['failure_checks'] ) ) { return new \WP_Error( 'sunrise_failure_checks', 'Invalid failure-resolution checks.' ); }
 		$state['update_failures'] = isset( $response['update_failures'] ) && true === $response['update_failures'];
@@ -739,7 +770,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
 		delete_option( 'sunrise_control_reauth_required' );
-		return array( 'profile_pending' => $updater_status_pending || ( ! empty( $state['php_versions'] ) && empty( $state['reported_php_version'] ) ) || ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'license_refreshed' => $license_refreshed, 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ) );
+		return array( 'profile_pending' => $management_pending || $updater_status_pending || ( ! empty( $state['php_versions'] ) && empty( $state['reported_php_version'] ) ) || ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'license_refreshed' => $license_refreshed, 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );
 		\WP_Upgrader::release_lock( 'sunrise_agent' );
@@ -748,7 +779,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 
 function agent_disconnect() {
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try { return agent_disconnect_locked(); } finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 
@@ -778,7 +809,7 @@ function agent_restart_enrollment( $confirmed = false ) {
 	if ( ! current_user_can( 'update_plugins' ) || ! current_user_can( 'update_themes' ) || ! current_user_can( 'update_core' ) ) { return new \WP_Error( 'sunrise_agent_forbidden', 'The enrolling administrator needs all update capabilities.' ); }
 	if ( true !== $confirmed ) { return new \WP_Error( 'sunrise_agent_confirmation', 'Confirm that you want a new site connection.' ); }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		$identity = installation_guard();
 		if ( is_wp_error( $identity ) && ! agent_reconnectable( agent_state() ) ) { return $identity; }
@@ -841,7 +872,7 @@ function agent_connection_recover() {
 function agent_reauthenticate( $replace = true ) {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		$state = agent_state();
 		if ( empty( $state['site_id'] ) ) { return new \WP_Error( 'sunrise_not_enrolled', 'Connect this site first.' ); }
@@ -849,6 +880,17 @@ function agent_reauthenticate( $replace = true ) {
 		if ( ! is_wp_error( $result ) || 'sunrise_reconnect_pending' === $result->get_error_code() ) { agent_schedule( 60 ); }
 		return $result;
 	} finally { \WP_Upgrader::release_lock( 'sunrise_agent' ); }
+}
+
+/** Retry transport/recovery on the separate wake hook, preserving routine cadence and server backoff. */
+function agent_schedule_job_recovery( $result = null ) {
+	$state = agent_state();
+	if ( ! $state || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || ! empty( $state['paused'] ) ) { return; }
+	$data = is_wp_error( $result ) ? $result->get_error_data() : null;
+	$backoff = is_array( $data ) && isset( $data['retry_after'] ) ? max( 60, (int) $data['retry_after'] ) : 60;
+	$args = array( get_current_user_id() ); $next = wp_next_scheduled( 'sunrise_wake_check_in', $args );
+	if ( $next && ( $next > time() + $backoff + 30 || is_array( $data ) && isset( $data['retry_after'] ) ) ) { wp_clear_scheduled_hook( 'sunrise_wake_check_in', $args ); }
+	agent_schedule( $backoff, null, 'sunrise_wake_check_in' );
 }
 
 /** Internal background work runs as the enrolled owner after validating their capabilities. */
@@ -864,8 +906,12 @@ function agent_synchronize( $routine = false, $hook = 'sunrise_check_in' ) {
 	}
 	if ( ! is_wp_error( $result ) && ( ! empty( $result['work_available'] ) || ! empty( agent_state()['remote_job'] ) ) ) {
 		require_once __DIR__ . '/agent-jobs.php';
+		// Reserve before hooks/uninstall code that can terminate PHP without reaching finally.
+		$recovery = wp_next_scheduled( 'sunrise_wake_check_in', array( get_current_user_id() ) );
+		agent_schedule_job_recovery();
+		$reserved = $recovery ? false : wp_next_scheduled( 'sunrise_wake_check_in', array( get_current_user_id() ) );
 		$job = agent_run_update_job();
-		if ( is_wp_error( $job ) ) { return $job; }
+		if ( is_wp_error( $job ) ) { agent_schedule_job_recovery( $job ); return $job; }
 		if ( $job ) {
 			$generation = agent_state()['applied']['generation'] ?? 0;
 			$result = agent_check_in();
@@ -885,6 +931,8 @@ function agent_synchronize( $routine = false, $hook = 'sunrise_check_in' ) {
 			}
 		}
 	}
+	if ( ! empty( $reserved ) && ! is_wp_error( $result ) && empty( agent_state()['remote_job'] ) && ( 'sunrise_wake_check_in' !== $hook || empty( $result['work_available'] ) ) ) { wp_unschedule_event( $reserved, 'sunrise_wake_check_in', array( get_current_user_id() ) ); }
+	elseif ( ! empty( $reserved ) || is_wp_error( $result ) && ! empty( agent_state()['remote_job'] ) ) { agent_schedule_job_recovery( $result ); }
 	if ( ! is_wp_error( $result ) ) { agent_report_errors(); }
 	return $result;
 }
@@ -919,7 +967,7 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 function agent_pause( $paused ) {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		$state = agent_state(); if ( ! $state ) { return new \WP_Error( 'sunrise_not_enrolled', 'Connect this site first.' ); }
 		$state['paused'] = (bool) $paused;

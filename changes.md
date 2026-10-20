@@ -4,7 +4,15 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
-No pending changes.
+## 0.3.33 — 2026-10-20
+
+- Reload connection state after acquiring its write lock so overlapping reports cannot overwrite a newer job record. Read fresh native lock ownership before recovery.
+
+- Recover queued-job receipts and interrupted executors on a short separate check-in instead of waiting an hour. Retain the no-repeat fence, verify the old process stopped before releasing its recorded locks, and honor server retry delays.
+
+- Include parent-theme usage in inventory so Control can distinguish themes in use from inactive themes.
+
+- Support negotiated remote plugin deactivation/deletion jobs, including ordered deactivation then uninstall in one request. Verify owner permissions, plugin identity/version, dependencies and filesystem access; protect Sunrise and unsupported paths, retain interrupted outcomes without automatic destructive retries, and report fresh inventory.
 
 ## 0.3.32 — 2026-10-19
 

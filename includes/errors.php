@@ -20,7 +20,7 @@ function error_capture_enabled() {
 function error_capture_setting( $enabled ) {
 	$access = agent_access(); if ( is_wp_error( $access ) ) { return $access; }
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
+	if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Connection work is running. Retry.' ); }
 	try {
 		$state = agent_state();
 		if ( empty( $state['site_id'] ) || ! agent_owner_valid( $state ) || is_wp_error( installation_guard() ) ) { return new \WP_Error( 'sunrise_errors_forbidden', 'A valid enrolled administrator connection is required.' ); }

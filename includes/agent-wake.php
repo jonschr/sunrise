@@ -35,7 +35,7 @@ function agent_wake_permission( $request ) {
 
 function agent_wake( $request ) {
  require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
- if ( ! \WP_Upgrader::create_lock( 'sunrise_agent', 120 ) ) { return new \WP_Error( 'sunrise_agent_busy', 'Check-in is already running.', array( 'status' => 409 ) ); }
+ if ( ! agent_connection_lock() ) { return new \WP_Error( 'sunrise_agent_busy', 'Check-in is already running.', array( 'status' => 409 ) ); }
  try {
   $state = agent_wake_state( $request ); if ( is_wp_error( $state ) ) { return $state; }
   $data = $request->get_json_params(); $name = 'sunrise_wake_' . $state['user_id']; $last = get_option( $name, array() );
