@@ -61,14 +61,14 @@ function network_page() {
 	foreach ( $network['plugins'] as $plugin ) {
 		echo '<tr><td><strong>' . esc_html( $plugin['name'] ) . '</strong><br><small>' . esc_html( $plugin['id'] ) . '</small></td><td><strong>' . esc_html( $plugin['updates'] ) . '</strong> / ' . esc_html( $plugin['installed'] ) . '<br><small>' . esc_html( sprintf( __( '%d unknown', 'sunrise' ), $plugin['unknown'] ) ) . '</small></td><td>';
 		foreach ( $plugin['sites'] as $id ) {
-			echo '<a href="' . esc_url( add_query_arg( array( 'page' => 'sunrise', 'site' => $id ), admin_url( 'options-general.php' ) ) ) . '">' . esc_html( wp_parse_url( $sites[ $id ]['url'], PHP_URL_HOST ) ) . '</a><br>';
+			echo '<a href="' . esc_url( add_query_arg( array( 'page' => 'sunrise', 'site' => $id ), admin_url( 'tools.php' ) ) ) . '">' . esc_html( wp_parse_url( $sites[ $id ]['url'], PHP_URL_HOST ) ) . '</a><br>';
 		}
 		echo '</td></tr>';
 	}
 	echo '</tbody></table><h2>' . esc_html__( 'Sites', 'sunrise' ) . '</h2><table class="widefat striped"><thead><tr><th>' . esc_html__( 'Site', 'sunrise' ) . '</th><th>' . esc_html__( 'Known available updates', 'sunrise' ) . '</th><th>' . esc_html__( 'Inventory status', 'sunrise' ) . '</th></tr></thead><tbody>';
 	foreach ( $sites as $id => $site ) {
 		$snapshot = $snapshots[ $id ];
-		echo '<tr><td><a href="' . esc_url( add_query_arg( array( 'page' => 'sunrise', 'site' => $id ), admin_url( 'options-general.php' ) ) ) . '"><strong>' . esc_html( $site['url'] ) . '</strong></a></td><td>';
+		echo '<tr><td><a href="' . esc_url( add_query_arg( array( 'page' => 'sunrise', 'site' => $id ), admin_url( 'tools.php' ) ) ) . '"><strong>' . esc_html( $site['url'] ) . '</strong></a></td><td>';
 		if ( ! empty( $snapshot['inventory'] ) ) {
 			$counts = aggregate_inventory( array( $id => $snapshot ) )['totals'];
 			echo esc_html( sprintf( __( '%1$d plugins · %2$d themes · %3$d core', 'sunrise' ), $counts['plugin_updates'], $counts['theme_updates'], $counts['core_updates'] ) );

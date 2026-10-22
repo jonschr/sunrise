@@ -514,12 +514,18 @@ function agent_inventory() {
 	$items = array( array( 'type' => 'core', 'installed_id' => 'wordpress', 'version' => $data['core']['version'], 'active' => true,
 		'update_available' => $data['core']['update_available'], 'observed_auto_update' => isset( $data['core']['updates'][0]['auto_update_selected'] ) ? $data['core']['updates'][0]['auto_update_selected'] : null, 'restrictions' => $restrictions ) );
 	require_once __DIR__ . '/plugin-management.php';
+	require_once __DIR__ . '/theme-management.php';
 	$management_directories = array_count_values( array_map( 'dirname', array_column( $data['plugins'], 'id' ) ) );
 	foreach ( array( 'plugins', 'themes' ) as $type ) {
 		foreach ( $data[ $type ] as $item ) {
 			$identity = agent_item_identity( $type, $item['id'] );
 			$management_restrictions = $restrictions;
 			if ( 'themes' === $type && ! empty( $item['active_parent'] ) ) { $management_restrictions[] = 'active_parent_theme'; }
+			if ( 'themes' === $type ) {
+				$guard = theme_management_target( $item['id'] );
+				if ( is_wp_error( $guard ) ) { $management_restrictions[] = str_replace( 'sunrise_', '', $guard->get_error_code() ); }
+				if ( ! current_user_can( 'delete_themes' ) ) { $management_restrictions[] = 'theme_management_forbidden'; }
+			}
 			if ( 'plugins' === $type ) {
 				$guard = plugin_management_target( $item['id'], true, $management_directories );
 				if ( is_wp_error( $guard ) ) { $management_restrictions[] = str_replace( 'sunrise_', '', $guard->get_error_code() ); }
@@ -678,6 +684,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 					$state['pending_report']['check_in_interval_seconds'] = AGENT_INTERVAL;
 				}
 				if ( ! empty( $state['plugin_management'] ) ) { $state['pending_report']['plugin_management'] = true; }
+				if ( ! empty( $state['theme_management'] ) ) { $state['pending_report']['theme_management'] = true; }
 				if ( ! empty( $state['php_versions'] ) ) { $state['pending_report']['php_version'] = PHP_VERSION; }
 				if ( ! empty( $state['automatic_updater_supported'] ) ) { $state['pending_report']['automatic_updater'] = agent_automatic_updater_status(); }
 				if ( ! empty( $state['update_failures'] ) ) {
@@ -735,7 +742,8 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		$state['check_in_cadence'] = ! empty( $response['check_in_cadence'] );
 		$state['wake_requests'] = isset( $response['wake_requests'] ) && true === $response['wake_requests'];
 		if ( isset( $state['pending_report']['wake_key'] ) && $state['wake_requests'] ) { $state['wake_registered'] = true; }
-		$management_pending = empty( $state['plugin_management'] ) && ! empty( $response['plugin_management'] );
+		$management_pending = ( empty( $state['plugin_management'] ) && ! empty( $response['plugin_management'] ) ) || ( empty( $state['theme_management'] ) && ! empty( $response['theme_management'] ) );
+		$state['theme_management'] = ! empty( $response['theme_management'] );
 		$state['plugin_management'] = ! empty( $response['plugin_management'] );
 		$state['update_jobs'] = isset( $response['update_jobs'] ) && true === $response['update_jobs'];
 		if ( isset( $response['failure_checks'] ) && ! validate_failure_checks( $response['failure_checks'] ) ) { return new \WP_Error( 'sunrise_failure_checks', 'Invalid failure-resolution checks.' ); }

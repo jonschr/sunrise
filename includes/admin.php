@@ -4,15 +4,24 @@ namespace Sunrise;
 defined( 'ABSPATH' ) || exit;
 
 add_action( 'admin_menu', function () {
-	add_options_page( 'Sunrise Site Settings', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
+	add_management_page( 'Sunrise Site Settings', 'Sunrise', 'manage_options', 'sunrise', __NAMESPACE__ . '\\admin_page' );
+} );
+
+// Preserve old Settings bookmarks before WordPress checks the removed menu's permissions.
+add_action( 'admin_init', function () {
+	global $pagenow;
+	if ( 'options-general.php' !== $pagenow || ! isset( $_GET['page'] ) || 'sunrise' !== $_GET['page'] || ! current_user_can( 'manage_options' ) ) { return; }
+	$params = array( 'page' => 'sunrise' );
+	foreach ( array( 'site', 'sunrise_environment' ) as $key ) { if ( isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ) { $params[ $key ] = sanitize_text_field( wp_unslash( $_GET[ $key ] ) ); } }
+	wp_safe_redirect( add_query_arg( $params, admin_url( 'tools.php' ) ) ); exit;
 } );
 
 add_action( 'admin_enqueue_scripts', function ( $hook ) {
-	if ( agent_connection_needed() || ( 'settings_page_sunrise' === $hook && agent_state() ) ) {
+	if ( agent_connection_needed() || ( 'tools_page_sunrise' === $hook && agent_state() ) ) {
 		wp_enqueue_script( 'sunrise-connect', plugins_url( '../assets/connect.js', __FILE__ ), array(), VERSION, true );
 		wp_localize_script( 'sunrise-connect', 'sunriseConnect', array( 'enroll' => rest_url( 'sunrise/v1/agent/connect' ), 'sync' => rest_url( 'sunrise/v1/agent/check-in' ), 'reconnect' => rest_url( 'sunrise/v1/agent/reconnect' ), 'control' => agent_url(), 'nonce' => wp_create_nonce( 'wp_rest' ) ) );
 	}
-	if ( 'settings_page_sunrise' === $hook ) {
+	if ( 'tools_page_sunrise' === $hook ) {
 		wp_add_inline_style( 'common', '.sunrise-wrap{max-width:1180px}.sunrise-wrap>form,.sunrise-wrap details{margin:12px 0}.sunrise-wrap p{max-width:90ch}.sunrise-wrap summary{cursor:pointer}.sunrise-wrap select{margin-right:6px}.sunrise-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}.sunrise-wrap td{padding:12px}.sunrise-wrap th{width:33.33%}.sunrise-wrap small{display:block;margin-top:6px}.sunrise-settings{max-width:820px}.sunrise-settings form{display:inline-block;margin:0 8px 12px 0}.sunrise-settings table{margin:12px 0 18px}.sunrise-diagnostics textarea{width:100%;font:12px/1.5 monospace}.sunrise-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}.sunrise-totals>div{background:white;border:1px solid #c3c4c7;padding:20px}.sunrise-totals strong{display:block;font-size:32px;line-height:1.3}.sunrise-totals span{color:#50575e}' );
 		foreach ( array( 'admin_notices', 'all_admin_notices', 'network_admin_notices' ) as $notice_hook ) { remove_all_actions( $notice_hook ); }
 		wp_enqueue_script( 'sunrise-shell', plugins_url( '../assets/shell.js', __FILE__ ), array(), VERSION, true );
@@ -64,7 +73,7 @@ function other_connections_section() {
 }
 
 add_action( 'admin_notices', function () {
-	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || 'settings_page_sunrise' === get_current_screen()->id ) { return; }
+	if ( ! agent_connection_needed() || ! current_user_can( 'manage_options' ) || 'tools_page_sunrise' === get_current_screen()->id ) { return; }
 	foreach ( agent_states() as $owner_state ) { if ( ! empty( $owner_state['site_id'] ) && empty( $owner_state['revoked'] ) && empty( $owner_state['reconnect'] ) && empty( $owner_state['identity_recovery'] ) && agent_owner_valid( $owner_state ) && agent_service_matches( $owner_state ) && $owner_state['url'] === installation_site_url() && ! is_wp_error( installation_guard() ) ) { return; } }
 	echo '<div class="notice notice-info"><p><strong>' . esc_html__( 'Connect this site to Sunrise', 'sunrise' ) . '</strong></p><p>' . esc_html__( 'Send this site’s update status to your Sunrise network and manage its updates there.', 'sunrise' ) . '</p>';
 	connection_form(); echo '<p></p></div>';
@@ -172,7 +181,7 @@ add_action( 'admin_post_sunrise', function () {
 	set_transient( 'sunrise_notice_' . get_current_user_id(), array( 'error' => is_wp_error( $result ) && ! $expected_pending, 'pending' => $expected_pending, 'message' => $notice ), 60 );
 	$redirect = array( 'page' => 'sunrise', 'site' => $site );
 	if ( 'agent_environment' === $action ) { $redirect['sunrise_environment'] = '1'; }
-	wp_safe_redirect( add_query_arg( $redirect, admin_url( 'options-general.php' ) ) );
+	wp_safe_redirect( add_query_arg( $redirect, admin_url( 'tools.php' ) ) );
 	exit;
 } );
 
@@ -182,7 +191,7 @@ function form_start( $site, $operation ) {
 	echo '<input type="hidden" name="action" value="sunrise"><input type="hidden" name="site" value="' . esc_attr( $site ) . '"><input type="hidden" name="operation" value="' . esc_attr( $operation ) . '">';
 }
 
-/** Hidden support setting: options-general.php?page=sunrise&sunrise_environment=1. */
+/** Hidden support setting: tools.php?page=sunrise&sunrise_environment=1. */
 function agent_environment_form() {
 	if ( ! current_user_can( 'manage_options' ) || ! isset( $_GET['sunrise_environment'] ) || '1' !== $_GET['sunrise_environment'] ) { return; }
 	echo '<section><h2>' . esc_html__( 'Control environment', 'sunrise' ) . '</h2><p>' . esc_html__( 'Applies to every Sunrise connection on this WordPress site. Changing environments pauses its managed updates and reports until each administrator reconnects. Site records and history in the previous environment are retained.', 'sunrise' ) . '</p>';
@@ -262,7 +271,7 @@ function admin_page() {
 		diagnostic_log_section();
 		echo '</div>'; return;
 	}
-	echo '<form method="get" action="' . esc_url( admin_url( 'options-general.php' ) ) . '"><input type="hidden" name="page" value="sunrise"><label for="sunrise-site">' . esc_html__( 'View', 'sunrise' ) . ' </label><select id="sunrise-site" name="site"><option value="overview" ' . selected( $site, 'overview', false ) . '>' . esc_html__( 'Network overview', 'sunrise' ) . '</option><option value="local" ' . selected( $site, 'local', false ) . '>' . esc_html__( 'This site', 'sunrise' ) . '</option>';
+	echo '<form method="get" action="' . esc_url( admin_url( 'tools.php' ) ) . '"><input type="hidden" name="page" value="sunrise"><label for="sunrise-site">' . esc_html__( 'View', 'sunrise' ) . ' </label><select id="sunrise-site" name="site"><option value="overview" ' . selected( $site, 'overview', false ) . '>' . esc_html__( 'Network overview', 'sunrise' ) . '</option><option value="local" ' . selected( $site, 'local', false ) . '>' . esc_html__( 'This site', 'sunrise' ) . '</option>';
 	foreach ( connections() as $id => $connection ) {
 		echo '<option value="' . esc_attr( $id ) . '" ' . selected( $site, $id, false ) . '>' . esc_html( $connection['url'] ) . '</option>';
 	}

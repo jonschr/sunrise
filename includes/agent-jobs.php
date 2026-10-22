@@ -4,6 +4,7 @@ defined( 'ABSPATH' ) || exit;
 
 require_once __DIR__ . '/execution-lock.php';
 require_once __DIR__ . '/plugin-management.php';
+require_once __DIR__ . '/theme-management.php';
 
 function agent_job_save( &$state, $record ) {
 	$state['remote_job'] = $record;
@@ -34,7 +35,7 @@ function agent_job_response( $response, $id = null ) {
 		|| ! in_array( $job['status'], array( 'queued', 'reserved', 'running', 'uncertain', 'succeeded', 'failed', 'cancelled', 'expired', 'closed_unverified' ), true ) ) { return new \WP_Error( 'sunrise_job_schema', 'Invalid job response.' ); }
 	$task = $job['payload'];
 	if ( ! is_array( $task ) || count( $task ) !== 6 || ! isset( $task['action'], $task['type'], $task['installed_id'], $task['version'], $task['from_version'] ) || ! array_key_exists( 'identity', $task )
-		|| ( 'install_update' !== $task['action'] && ! ( plugin_management_action( $task['action'] ) && 'plugin' === $task['type'] ) ) || ! in_array( $task['type'], array( 'plugin', 'theme', 'core' ), true ) || ! is_string( $task['installed_id'] ) || ! strlen( $task['installed_id'] ) || strlen( $task['installed_id'] ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $task['installed_id'] ) || ( 'core' === $task['type'] && 'wordpress' !== $task['installed_id'] )
+		|| ( 'install_update' !== $task['action'] && ! ( ( plugin_management_action( $task['action'] ) && 'plugin' === $task['type'] ) || ( 'delete_theme' === $task['action'] && 'theme' === $task['type'] ) ) ) || ! in_array( $task['type'], array( 'plugin', 'theme', 'core' ), true ) || ! is_string( $task['installed_id'] ) || ! strlen( $task['installed_id'] ) || strlen( $task['installed_id'] ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $task['installed_id'] ) || ( 'core' === $task['type'] && 'wordpress' !== $task['installed_id'] )
 		|| ! is_string( $task['version'] ) || ( 'install_update' === $task['action'] ? ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $task['version'] ) : ( strlen( $task['version'] ) > 128 || $task['version'] !== $task['from_version'] ) ) || ! is_string( $task['from_version'] ) || strlen( $task['from_version'] ) > 128 ) { return new \WP_Error( 'sunrise_job_schema', 'Invalid installation task.' ); }
 	if ( null !== $task['identity'] ) {
 		if ( ! is_array( $task['identity'] ) || count( $task['identity'] ) !== 5 ) { return new \WP_Error( 'sunrise_job_schema', 'Invalid component identity.' ); }
@@ -87,7 +88,7 @@ function agent_run_update_job() {
 			// Acquiring the process-held file lock proves the old Sunrise executor released it or exited.
 			$record['phase'] = 'result';
 			$record['status'] = isset( $fence['result']['status'] ) ? $fence['result']['status'] : 'uncertain';
-			$record['code'] = isset( $fence['result']['code'] ) ? $fence['result']['code'] : ( isset( $fence['management_stage'] ) ? 'plugin_management_interrupted' : 'execution_interrupted' ); agent_job_save( $state, $record );
+			$record['code'] = isset( $fence['result']['code'] ) ? $fence['result']['code'] : ( isset( $fence['management_stage'] ) ? ( 'delete_theme' === $record['job']['payload']['action'] ? 'theme_management_interrupted' : 'plugin_management_interrupted' ) : 'execution_interrupted' ); agent_job_save( $state, $record );
 		}
 		if ( $record && 'result' === $record['phase'] ) { return agent_job_result( $state, $record ); }
 		if ( $record && 'uncertain' === $record['phase'] ) {
@@ -132,8 +133,9 @@ function agent_run_update_job() {
 		ob_start();
 		try {
 			$task = $job['payload']; $native = array( 'action' => 'update', 'type' => $task['type'], 'id' => $task['installed_id'], 'version' => $task['version'] );
-			$management = plugin_management_action( $task['action'] );
-			$result = $management ? plugin_management_permission( $task ) : job_permission( $native, true );
+			$theme_management = 'delete_theme' === $task['action'];
+			$management = $theme_management || plugin_management_action( $task['action'] );
+			$result = $theme_management ? theme_management_permission( $task ) : ( $management ? plugin_management_permission( $task ) : job_permission( $native, true ) );
 			foreach ( agent_states() as $connection ) { if ( ! empty( $connection['paused'] ) && agent_owner_valid( $connection ) ) { $result = job_error( 'site_paused', 'This installation is paused.' ); } }
 			if ( ! agent_owner_valid( $state ) || $until <= time() ) { $result = job_error( 'execution_window', 'Start authorization expired.' ); }
 			if ( ! $management ) {
@@ -146,7 +148,7 @@ function agent_run_update_job() {
 				if ( ! is_wp_error( $result ) && $premium && 'gp-premium/gp-premium.php' === $task['installed_id'] && function_exists( 'generate_premium_updater' ) && ! did_action( 'admin_init' ) ) { generate_premium_updater(); }
 				if ( ! is_wp_error( $result ) && $premium ) { delete_site_transient( 'update_plugins' ); }
 				if ( ! is_wp_error( $result ) ) { $result = install_update( $native ); }
-			} elseif ( ! is_wp_error( $result ) ) { $result = manage_plugin( $task, $fence ); }
+			} elseif ( ! is_wp_error( $result ) ) { $result = $theme_management ? manage_theme( $task, $fence ) : manage_plugin( $task, $fence ); }
 			$record['status'] = is_wp_error( $result ) ? 'failed' : 'succeeded';
 			$record['code'] = is_wp_error( $result ) ? agent_job_failure_code( $result ) : $result['code'];
 			if ( ! $record['code'] ) { $record['code'] = 'update_failed'; }

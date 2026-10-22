@@ -4,6 +4,11 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.35 — 2026-10-21
+
+- Move Sunrise from Settings to Tools, preserving old Settings bookmarks and environment-selection links.
+- Support negotiated remote deletion of inactive themes through reviewed Control jobs. Protect the active theme and its parent, validate permissions, identity, version and filesystem access, and preserve interrupted outcomes without repeating deletion.
+
 ## 0.3.34 — 2026-10-20
 
 - Suppress WordPress automatic plugin-update emails when every reported plugin update succeeds. Preserve normal notifications for failures, mixed results and unknown outcomes; update reporting in Control is unchanged.

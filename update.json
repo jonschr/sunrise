@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.34",
+  "version": "0.3.35",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.34/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.35/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Suppress automatic plugin-update emails only when every reported plugin update succeeds. Preserve normal failure and mixed-result notifications, existing email opt-outs, and update activity reporting."
+    "changelog": "Delete inactive themes through reviewed Sunrise Control requests. Protect active child and parent themes, verify permissions and file removal, and retain interrupted outcomes without repeating deletion. Move Sunrise from Settings to Tools while preserving old Settings links."
   }
 }
