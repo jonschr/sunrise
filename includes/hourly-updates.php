@@ -14,11 +14,12 @@ function hourly_update_target( $type, $item ) {
 function hourly_update_allowed( $update, $item, $type ) {
 	if ( ! $update ) { return false; }
 	$target = hourly_update_target( $type, $item ); if ( ! $target ) { return false; }
-	$key = $type . ':' . $target['installed_id'];
 	if ( (int) get_option( manual_update_guard_name( $type, $target['installed_id'], $target['version'] ) ) > time() - 90 * DAY_IN_SECONDS ) { return false; }
 	$blocked = array();
 	foreach ( array( 'sunrise_automatic_update_failures', 'sunrise_hourly_update_attempts' ) as $name ) {
-		$records = get_option( $name, array() ); if ( isset( $records[ $key ] ) ) { $blocked[] = $records[ $key ]; }
+		foreach ( get_option( $name, array() ) as $failure ) {
+			if ( $type === $failure['type'] && $target['installed_id'] === failure_installed_id( $failure['type'], $failure['installed_id'] ) ) { $blocked[] = $failure; }
+		}
 	}
 	foreach ( agent_states() as $connection ) {
 		if ( ! agent_owner_valid( $connection ) || ! empty( $connection['revoked'] ) ) { continue; }

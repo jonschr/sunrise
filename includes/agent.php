@@ -486,6 +486,21 @@ function agent_prepare_update_providers() {
 	if ( function_exists( 'wp_migrate_db_pro' ) ) { \wp_migrate_db_pro(); }
 }
 
+/** Native updaters execute offer.plugin, which must be the installed basename, not a display name. */
+function agent_plugin_update_ids( $updates ) {
+	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) { return $updates; }
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	$plugins = get_plugins(); $changed = false;
+	foreach ( $updates->response as $id => $offer ) {
+		if ( ! isset( $plugins[ $id ] ) || ! is_object( $offer ) || ( isset( $offer->plugin ) && $id === $offer->plugin ) ) { continue; }
+		if ( ! $changed ) { $updates = clone $updates; $changed = true; }
+		$updates->response[ $id ] = clone $offer; $updates->response[ $id ]->plugin = $id;
+	}
+	return $updates;
+}
+add_filter( 'pre_set_site_transient_update_plugins', __NAMESPACE__ . '\\agent_plugin_update_ids', PHP_INT_MAX );
+add_filter( 'site_transient_update_plugins', __NAMESPACE__ . '\\agent_plugin_update_ids', PHP_INT_MAX );
+
 /** Mirror standard Plugin Update Checker cache entries even when its owner only loads in wp-admin. */
 function agent_puc_update_offers( $updates ) {
 	if ( ! is_object( $updates ) ) { return $updates; }
@@ -951,6 +966,7 @@ add_action( 'sunrise_check_in', function ( $user_id = 0 ) {
 	// An old no-argument cron event belongs to the original legacy connection only.
 	if ( ! $user_id ) { $legacy = get_option( 'sunrise_agent', array() ); $user_id = isset( $legacy['user_id'] ) ? $legacy['user_id'] : 0; }
 	if ( ! isset( $states[ $user_id ] ) || ! agent_owner_valid( $states[ $user_id ] ) || ! empty( $states[ $user_id ]['revoked'] ) ) { return; }
+	if ( agent_background_dispatch( 'sunrise_check_in', $user_id ) ) { return; }
 	try {
 		wp_set_current_user( $user_id );
 		$name = 'sunrise_routine_check_in_' . (int) $user_id;

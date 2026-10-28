@@ -2,6 +2,15 @@
 namespace Sunrise;
 defined( 'ABSPATH' ) || exit;
 
+/** Repair legacy provider names only when exactly one installed plugin owns the name. */
+function failure_installed_id( $type, $id ) {
+	if ( 'plugin' !== $type ) { return $id; }
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	$plugins = get_plugins(); if ( isset( $plugins[ $id ] ) ) { return $id; }
+	$matches = array_keys( array_filter( $plugins, function ( $plugin ) use ( $id ) { return $plugin['Name'] === $id; } ) );
+	return 1 === count( $matches ) ? $matches[0] : $id;
+}
+
 function automatic_failure_reason( $error ) {
 	if ( ! is_wp_error( $error ) ) { return 'unknown'; }
 	$code = preg_replace( '/^sunrise_/', '', strtolower( $error->get_error_code() ) );
@@ -42,6 +51,7 @@ function capture_automatic_update_failures( $results ) {
 			$id = 'core' === $type ? 'wordpress' : ( isset( $result->item->$type ) ? $result->item->$type : '' );
 			$version = 'core' === $type && isset( $result->item->current ) ? $result->item->current : ( isset( $result->item->new_version ) ? $result->item->new_version : '' );
 			if ( ! is_string( $id ) || ! $id || strlen( $id ) > 255 || preg_match( '/[\x00-\x1f\x7f]/', $id ) || ! is_string( $version ) || ! preg_match( '/^[0-9][0-9A-Za-z.+_-]{0,63}$/D', $version ) ) { continue; }
+			$id = failure_installed_id( $type, $id );
 			if ( is_wp_error( $result->result ) && in_array( 'sunrise_execution_busy', $result->result->get_error_codes(), true ) ) { continue; }
 			$key = $type . ':' . $id;
 			$success = $result->result && ! is_wp_error( $result->result );
@@ -64,7 +74,9 @@ function capture_automatic_update_failures( $results ) {
 add_action( 'automatic_updates_complete', __NAMESPACE__ . '\\capture_automatic_update_failures' );
 
 function automatic_update_activity() {
-	return array_values( array_filter( get_option( 'sunrise_automatic_update_activity', array() ), function ( $item ) { return isset( $item['updated_at'] ) && $item['updated_at'] > time() - DAY_IN_SECONDS; } ) );
+	$activity = array_values( array_filter( get_option( 'sunrise_automatic_update_activity', array() ), function ( $item ) { return isset( $item['updated_at'] ) && $item['updated_at'] > time() - DAY_IN_SECONDS; } ) );
+	foreach ( $activity as &$item ) { $item['installed_id'] = failure_installed_id( $item['type'], $item['installed_id'] ); } unset( $item );
+	return $activity;
 }
 
 function failure_installed_versions( $inventory ) {
@@ -77,7 +89,12 @@ function automatic_update_failures( $inventory, $specific = true ) {
 	foreach ( get_option( 'sunrise_automatic_update_failures', array() ) as $key => $failure ) {
 		if ( ! isset( $failures[ $key ] ) || version_compare( $failure['version'], $failures[ $key ]['version'], '>=' ) ) { $failures[ $key ] = $failure; }
 	}
-	$versions = failure_installed_versions( $inventory ); $remaining = $failures;
+	$versions = failure_installed_versions( $inventory ); $remaining = array();
+	foreach ( $failures as $failure ) {
+		$failure['installed_id'] = failure_installed_id( $failure['type'], $failure['installed_id'] );
+		$key = $failure['type'] . ':' . $failure['installed_id'];
+		if ( ! isset( $remaining[ $key ] ) || version_compare( $failure['version'], $remaining[ $key ]['version'], '>' ) || ( $failure['version'] === $remaining[ $key ]['version'] && $failure['failed_at'] >= $remaining[ $key ]['failed_at'] ) ) { $remaining[ $key ] = $failure; }
+	}
 	foreach ( $remaining as $key => $failure ) {
 		if ( isset( $versions[ $key ] ) && version_compare( $versions[ $key ], $failure['version'], '>=' ) ) { unset( $remaining[ $key ] ); }
 	}

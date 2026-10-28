@@ -2,6 +2,7 @@
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! defined( 'SUNRISE_TEST_SITE' ) || ! SUNRISE_TEST_SITE || 'local' !== wp_get_environment_type() ) { WP_CLI::error( 'Disposable local fixture required.' ); }
 $previous = get_option( 'sunrise_automatic_update_failures', null );
 $previous_activity = get_option( 'sunrise_automatic_update_activity', null );
+$previous_attempts = get_option( 'sunrise_hourly_update_attempts', null ); $fixture_dirs = array();
 $check = function ( $value, $message ) { if ( ! $value ) { throw new RuntimeException( $message ); } };
 try {
  delete_option( 'sunrise_automatic_update_failures' );
@@ -47,5 +48,21 @@ try {
  do_action( 'automatic_updates_complete', array( 'plugin' => array( $php_error ) ) );
  $check( 'incompatible_php' === Sunrise\automatic_update_failures( array(), true )[0]['code'] && 'incompatible' === Sunrise\automatic_update_failures( array(), false )[0]['code'], 'New failure codes are negotiated and downgraded only for legacy Control' );
  $check( 'incompatible_php' === get_option( 'sunrise_automatic_update_failures' )['plugin:fixture/fixture.php']['code'], 'Legacy report conversion must not overwrite the specific stored failure' );
- WP_CLI::success( 'Native failure capture, deduplication, secret-free reasons, successful auto/manual resolution and WordPress version comparison passed.' );
-} finally { if ( null === $previous ) { delete_option( 'sunrise_automatic_update_failures' ); } else { update_option( 'sunrise_automatic_update_failures', $previous, false ); } if ( null === $previous_activity ) { delete_option( 'sunrise_automatic_update_activity' ); } else { update_option( 'sunrise_automatic_update_activity', $previous_activity, false ); } }
+ require_once dirname( __DIR__ ) . '/includes/hourly-updates.php';
+ $slug = 'sunrise-failure-identity-' . strtolower( wp_generate_password( 10, false, false ) ); $file = $slug . '/fixture.php'; $name = 'Sunrise premium identity fixture';
+ $dir = WP_PLUGIN_DIR . '/' . $slug; mkdir( $dir ); $fixture_dirs[] = $dir; file_put_contents( $dir . '/fixture.php', "<?php\n/* Plugin Name: $name\nVersion: 1.0 */\n" ); wp_clean_plugins_cache( false );
+ $legacy = array( 'type' => 'plugin', 'installed_id' => $name, 'version' => '2.0', 'code' => 'filesystem_unavailable', 'failed_at' => time() );
+ update_option( 'sunrise_automatic_update_failures', array( 'plugin:' . $name => $legacy ) ); delete_option( 'sunrise_hourly_update_attempts' );
+ $inventory = array( array( 'type' => 'plugins', 'installed_id' => $file, 'version' => '1.0' ) );
+ $check( $file === Sunrise\automatic_update_failures( $inventory )[0]['installed_id'], 'A unique display-name failure maps to the installed file identity' );
+ $event = array( 'id' => wp_generate_uuid4(), 'type' => 'plugin', 'installed_id' => $name, 'version' => '2.0', 'status' => 'failed', 'code' => 'filesystem_unavailable', 'updated_at' => time() ); update_option( 'sunrise_automatic_update_activity', array( $event ) );
+ $check( $file === Sunrise\automatic_update_activity()[0]['installed_id'] && $event['id'] === Sunrise\automatic_update_activity()[0]['id'], 'Legacy activity uses the same canonical identity without changing its event ID' );
+ $check( false === Sunrise\hourly_update_allowed( true, (object) array( 'plugin' => $file, 'new_version' => '2.0' ), 'plugin' ), 'Legacy failure identity cannot bypass the bonus retry guard' );
+ $check( true === Sunrise\hourly_update_allowed( true, (object) array( 'plugin' => $file, 'new_version' => '2.1' ), 'plugin' ), 'Newer targets remain eligible' );
+ delete_option( 'sunrise_automatic_update_failures' ); update_option( 'sunrise_hourly_update_attempts', array( 'plugin:' . $name => $legacy ) );
+ $check( false === Sunrise\hourly_update_allowed( true, (object) array( 'plugin' => $file, 'new_version' => '2.0' ), 'plugin' ), 'Legacy unconfirmed attempts retain their bonus retry guard' );
+ $inventory[0]['version'] = '2.0'; $check( array() === Sunrise\automatic_update_failures( $inventory ), 'Verified installed versions resolve a legacy name-only failure' );
+ $duplicate = $dir . '-duplicate'; mkdir( $duplicate ); $fixture_dirs[] = $duplicate; file_put_contents( $duplicate . '/fixture.php', "<?php\n/* Plugin Name: $name\nVersion: 1.0 */\n" ); wp_clean_plugins_cache( false );
+ $check( $name === Sunrise\failure_installed_id( 'plugin', $name ) && $file === Sunrise\failure_installed_id( 'plugin', $file ), 'Duplicate display names are not guessed and explicit file identities stay authoritative' );
+ WP_CLI::success( 'Native failure capture, generic identity repair, retry guards, secret-free reasons, resolution and WordPress version comparison passed.' );
+} finally { foreach ( $fixture_dirs as $dir ) { unlink( $dir . '/fixture.php' ); rmdir( $dir ); } wp_clean_plugins_cache( false ); if ( null === $previous_attempts ) { delete_option( 'sunrise_hourly_update_attempts' ); } else { update_option( 'sunrise_hourly_update_attempts', $previous_attempts, false ); } if ( null === $previous ) { delete_option( 'sunrise_automatic_update_failures' ); } else { update_option( 'sunrise_automatic_update_failures', $previous, false ); } if ( null === $previous_activity ) { delete_option( 'sunrise_automatic_update_activity' ); } else { update_option( 'sunrise_automatic_update_activity', $previous_activity, false ); } }

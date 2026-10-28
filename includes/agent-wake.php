@@ -64,6 +64,7 @@ function agent_wake( $request ) {
 add_action( 'sunrise_wake_check_in', function ( $user_id ) {
  $states = agent_states();
  if ( ! isset( $states[ $user_id ] ) || ! agent_owner_valid( $states[ $user_id ] ) || ! empty( $states[ $user_id ]['revoked'] ) || ! empty( $states[ $user_id ]['paused'] ) ) { return; }
+ if ( agent_background_dispatch( 'sunrise_wake_check_in', $user_id ) ) { return; }
  $previous = get_current_user_id();
  try {
   wp_set_current_user( $user_id );

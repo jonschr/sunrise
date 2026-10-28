@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.35
+Stable tag: 0.3.36
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,10 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.36 =
+* Initialize scheduled checks and updates in an authenticated administrator request so update providers load normally.
+* Normalize plugin update identities and reconcile unambiguous legacy failure names without resetting bonus retry protection.
 
 = 0.3.35 =
 * Delete inactive themes through reviewed Control requests, protecting active child and parent themes and preserving interrupted outcomes without repeating deletion.

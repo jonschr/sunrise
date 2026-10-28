@@ -17,3 +17,4 @@ for task_test in agent-check agent-cadence agent-fallback agent-wake identity ag
   case "$task_test" in agent-check) task_file=tests/agent-check.php ;; *) task_file=tests/$task_test-check.php ;; esac
   wp --require="$PWD/tests/no-network.php" --path="$task_wp_root" --user=1 eval-file "$PWD/$task_file"
 done
+php tests/background-context-check.php "$task_wp_root"
