@@ -12,8 +12,9 @@ try {
  if ( 'site-admin@example.invalid' !== $contacts['admin_email'] || wp_get_current_user()->user_email !== $contacts['connection_email'] ) { throw new RuntimeException( 'Site and connection-owner emails must remain distinct' ); }
  update_option( 'admin_email', 'changed-admin@example.invalid' );
  if ( 'changed-admin@example.invalid' !== Sunrise\agent_site_profile( true )['admin_email'] ) { throw new RuntimeException( 'Changed administration email was not refreshed' ); }
- update_option( 'admin_email', '' );
- if ( null !== Sunrise\agent_site_profile( true )['admin_email'] ) { throw new RuntimeException( 'Missing email must not become an invented contact' ); }
+ add_filter( 'option_admin_email', '__return_empty_string' );
+ try { if ( null !== Sunrise\agent_site_profile( true )['admin_email'] ) { throw new RuntimeException( 'Missing email must not become an invented contact' ); } }
+ finally { remove_filter( 'option_admin_email', '__return_empty_string' ); }
  $upload = wp_upload_bits( 'sunrise-profile-fixture-' . wp_generate_uuid4() . '.png', null, base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHj8AAAAASUVORK5CYII=' ) );
  if ( $upload['error'] ) { throw new RuntimeException( 'Fixture upload failed' ); } $file = $upload['file'];
  $id = wp_insert_attachment( array( 'post_title' => 'Sunrise profile fixture', 'post_mime_type' => 'image/png', 'post_status' => 'inherit' ), $file ); update_option( 'site_icon', $id );
