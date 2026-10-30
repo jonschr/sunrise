@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.36",
+  "version": "0.3.37",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.36/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.37/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Run scheduled checks and updates in a fresh authenticated WordPress administrator request so update providers initialize normally. Normalize installed plugin offer identities and reconcile unambiguous legacy failure names while preserving failed-target protections for bonus hourly retries."
+    "changelog": "Report the WordPress administration email and the connection owner’s account email after Control advertises support. Keep contacts current through acknowledged profiles and retain compatibility with older Control versions."
   }
 }

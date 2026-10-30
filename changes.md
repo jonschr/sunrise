@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.37 — 2026-10-30
+
+- Report the WordPress administration email and connection-owner email after Control negotiation. Refresh changed addresses through acknowledged site profiles; keep older Control versions compatible.
+
 ## 0.3.36 — 2026-10-27
 
 - Run scheduled checks and updates in a fresh, authenticated WordPress admin request so update providers initialize under the connected administrator. Normalize all plugin update offer IDs to installed file paths.

@@ -643,8 +643,14 @@ function agent_refresh_inventory( $request, &$state ) {
 }
 
 /** Small local thumbnail, sent only when changed; Control never needs to fetch a site's favicon. */
-function agent_site_profile() {
+function agent_site_profile( $include_contacts = false ) {
 	$profile = array( 'name' => wp_html_excerpt( html_entity_decode( sanitize_text_field( get_bloginfo( 'name' ) ), ENT_QUOTES, 'UTF-8' ), 200, '' ), 'icon' => null );
+	if ( $include_contacts ) {
+		$owner = wp_get_current_user();
+		foreach ( array( 'admin_email' => get_option( 'admin_email' ), 'connection_email' => $owner->user_email ) as $key => $email ) {
+			$profile[ $key ] = is_string( $email ) && strlen( $email ) <= 254 && is_email( $email ) ? $email : null;
+		}
+	}
 	$id = (int) get_option( 'site_icon' );
 	$original = $id ? get_attached_file( $id ) : false;
 	$size = $id ? image_get_intermediate_size( $id, array( 32, 32 ) ) : false;
@@ -717,7 +723,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 					$key = agent_wake_key( $state ); if ( is_wp_error( $key ) ) { return $key; } $state['pending_report']['wake_key'] = $key;
 				}
 				if ( ! empty( $state['site_profiles'] ) ) {
-					$profile = agent_site_profile();
+					$profile = agent_site_profile( ! empty( $state['site_contact_emails'] ) );
 					if ( hash( 'sha256', wp_json_encode( $profile ) ) !== ( isset( $state['site_profile_hash'] ) ? $state['site_profile_hash'] : '' ) ) { $state['pending_report']['site_profile'] = $profile; }
 				}
 				if ( ! empty( $state['refresh_ack_pending'] ) && ! empty( $state['refresh_result'] ) ) { $state['pending_report']['refresh_ack'] = $state['refresh_result']; }
@@ -779,6 +785,8 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		}
 		if ( isset( $state['pending_report']['automatic_update_failures'] ) ) { $state['update_failure_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['automatic_update_failures'] ) ); }
 		$state['site_profiles'] = isset( $response['site_profiles'] ) && true === $response['site_profiles'];
+		$contacts_pending = empty( $state['site_contact_emails'] ) && ! empty( $response['site_contact_emails'] );
+		$state['site_contact_emails'] = ! empty( $response['site_contact_emails'] );
 		$state['php_versions'] = ! empty( $response['php_versions'] );
 		$updater_status_pending = empty( $state['automatic_updater_supported'] ) && ! empty( $response['automatic_updater_status'] );
 		$state['automatic_updater_supported'] = ! empty( $response['automatic_updater_status'] );
@@ -793,7 +801,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		unset( $state['pending_report'] );
 		if ( ! agent_store( $state ) ) { return new \WP_Error( 'sunrise_agent_storage', 'Could not persist applied policy.' ); }
 		delete_option( 'sunrise_control_reauth_required' );
-		return array( 'profile_pending' => $management_pending || $updater_status_pending || ( ! empty( $state['php_versions'] ) && empty( $state['reported_php_version'] ) ) || ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'license_refreshed' => $license_refreshed, 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ) );
+		return array( 'profile_pending' => $contacts_pending || $management_pending || $updater_status_pending || ( ! empty( $state['php_versions'] ) && empty( $state['reported_php_version'] ) ) || ( ! empty( $state['wake_requests'] ) && empty( $state['wake_registered'] ) ) || ( ! empty( $state['site_profiles'] ) && empty( $state['site_profile_hash'] ) ) || ( ! empty( $state['update_failures'] ) && empty( $state['update_failure_hash'] ) ), 'site_id' => $state['site_id'], 'policy_generation' => $applied['generation'], 'receipt_sequence' => $state['sequence'], 'refreshed' => agent_refresh_inventory( $refresh, $state ), 'license_refreshed' => $license_refreshed, 'work_available' => $state['update_jobs'] && ! empty( $response['work_available'] ) );
 	} finally {
 		wp_set_current_user( $previous );
 		\WP_Upgrader::release_lock( 'sunrise_agent' );

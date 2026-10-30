@@ -13,7 +13,7 @@ if test "$#" != 1; then
 fi
 task_wp_root=$1
 # These fixtures refuse non-local/non-test sites and intercept their outbound requests.
-for task_test in agent-check agent-cadence agent-fallback agent-wake identity agent-restart agent-job-recovery plugin-management theme-management manual-updates manual-report hourly-updates update-failures update-emails; do
+for task_test in agent-check agent-profile agent-cadence agent-fallback agent-wake identity agent-restart agent-job-recovery plugin-management theme-management manual-updates manual-report hourly-updates update-failures update-emails; do
   case "$task_test" in agent-check) task_file=tests/agent-check.php ;; *) task_file=tests/$task_test-check.php ;; esac
   wp --require="$PWD/tests/no-network.php" --path="$task_wp_root" --user=1 eval-file "$PWD/$task_file"
 done
