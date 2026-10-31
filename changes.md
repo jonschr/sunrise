@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.38 — 2026-10-30
+
+- Share bounded plugin changelogs from installed native update providers after Control negotiation, including Plugin Update Checker JSON and repository Markdown notes. Cache lookups, rotate through offers, and retain normal update behavior.
+
 ## 0.3.37 — 2026-10-30
 
 - Report the WordPress administration email and connection-owner email after Control negotiation. Refresh changed addresses through acknowledged site profiles; keep older Control versions compatible.

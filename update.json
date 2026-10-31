@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.37",
+  "version": "0.3.38",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.37/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.38/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "Report the WordPress administration email and the connection owner’s account email after Control advertises support. Keep contacts current through acknowledged profiles and retain compatibility with older Control versions."
+    "changelog": "<h4>0.3.38</h4><ul><li>Share bounded plugin changelogs from installed native update providers after Control negotiation, including Plugin Update Checker JSON and repository Markdown notes.</li><li>Cache lookups per enrolled administrator and connection, rotate through available and ignored offers, honor retry backoff, and keep normal update behavior and older Control compatibility.</li></ul>"
   }
 }

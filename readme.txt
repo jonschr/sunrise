@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.37
+Stable tag: 0.3.38
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,9 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.38 =
+* Share bounded changelog notes from installed update providers after Control negotiation. Cache lookups per connection owner and retain compatibility with older Control versions.
 
 = 0.3.37 =
 * Report the site administration email and connection-owner email after Control negotiation. Refresh changed or cleared contacts without changing authentication.
