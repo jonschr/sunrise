@@ -27,12 +27,17 @@ try {
  delete_option( 'sunrise_error_capture_lock' );Sunrise\capture_error_summary( $error );wp_clear_scheduled_hook( 'sunrise_error_report' );$limited = true;Sunrise\error_report_followup();
  $retry = wp_next_scheduled( 'sunrise_error_report' );$check( $retry >= time() + 295, 'Provider Retry-After is honored by persistent follow-up scheduling' );
  delete_option( 'sunrise_error_capture_lock' );Sunrise\capture_error_summary( $error );$check( $retry === wp_next_scheduled( 'sunrise_error_report' ), 'Another fatal cannot shorten an existing provider backoff' );
- $limited = false;wp_clear_scheduled_hook( 'sunrise_error_report' );$before = count( $requests );
+ $limited = false;delete_option( 'sunrise_error_report_retry_at' );wp_clear_scheduled_hook( 'sunrise_error_report' );$before = count( $requests );
  require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
  $locked = WP_Upgrader::create_lock( 'sunrise_agent', 120 );$check( $locked, 'Fixture takes the shared worker lock' );
  Sunrise\error_report_followup();$check( count( $requests ) === $before && wp_next_scheduled( 'sunrise_error_report' ), 'Busy connection work defers diagnostics without running a second worker' );WP_Upgrader::release_lock( 'sunrise_agent' );
- wp_clear_scheduled_hook( 'sunrise_error_report' );$groups = Sunrise\error_summaries();foreach ( $groups as &$group ) { $group['first_at'] = time() - 1200;$group['last_at'] = time() - 1000; }unset( $group );update_option( 'sunrise_error_groups', $groups, false );
+ wp_clear_scheduled_hook( 'sunrise_error_report' );$groups = Sunrise\error_summaries();foreach ( $groups as &$group ) { $group['first_at'] = time() - 1200;$group['last_at'] = time() - 1000;unset( $group['occurrences'] ); }unset( $group );update_option( 'sunrise_error_groups', $groups, false );
  Sunrise\error_report_followup();$check( count( $requests ) === $before && ! wp_next_scheduled( 'sunrise_error_report' ), 'Old errors do not keep a diagnostic retry loop alive' );
+ $state['error_followups_supported'] = true;Sunrise\agent_store( $state );
+ foreach ( $groups as &$group ) { $group['count'] = 1;$group['first_at'] = time() - 360;$group['last_at'] = time() - 360;unset( $group['occurrences'] ); }unset( $group );update_option( 'sunrise_error_groups', $groups, false );
+ Sunrise\error_report_followup();$last = json_decode( end( $requests )['body'], true );
+ $check( count( $requests ) === $before + 1 && $last['checked_at'] >= time() - 5, 'Negotiated follow-up confirms an unchanged single-error snapshot after five minutes' );
+ $before = count( $requests );Sunrise\agent_report_errors();$check( count( $requests ) === $before, 'Routine delivery still coalesces an acknowledged unchanged snapshot' );
  $state['errors_enabled'] = false;Sunrise\agent_store( $state );delete_option( 'sunrise_error_capture_lock' );Sunrise\capture_error_summary( $error );Sunrise\error_report_followup();
  $check( count( $requests ) === $before && ! wp_next_scheduled( 'sunrise_error_report' ), 'Opt-out blocks both follow-up capture and delivery' );
 } finally {

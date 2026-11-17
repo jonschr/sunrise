@@ -2,7 +2,7 @@
 Contributors: jonschroeder
 Requires at least: 6.6
 Requires PHP: 7.4
-Stable tag: 0.3.39
+Stable tag: 0.3.40
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,9 @@ HTTPS is required except for explicitly local WordPress environments. See README
 Updates come from published GitHub releases at github.com/jonschr/sunrise. Use the sunrise.zip release asset. WordPress.org updates are disabled to prevent replacement by an unrelated plugin with the same name.
 
 == Changelog ==
+
+= 0.3.40 =
+* Complete a negotiated five-minute diagnostic follow-up even when a single fatal does not repeat, so Control can label completed follow-ups separately from unknown recurrence.
 
 = 0.3.39 =
 * Upload new fatal diagnostics through a short, coalesced WP-Cron follow-up, independently of hourly inventory checks. Preserve worker locks, opt-outs, retries and normal update behavior.

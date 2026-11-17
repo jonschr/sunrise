@@ -798,6 +798,7 @@ function agent_check_in( $routine = false, $allow_recovery = true ) {
 		$state['automatic_updater_supported'] = ! empty( $response['automatic_updater_status'] );
 		if ( isset( $state['pending_report']['php_version'] ) ) { $state['reported_php_version'] = $state['pending_report']['php_version']; }
 		if ( isset( $state['pending_report']['site_profile'] ) ) { $state['site_profile_hash'] = hash( 'sha256', wp_json_encode( $state['pending_report']['site_profile'] ) ); }
+		$state['error_followups_supported'] = isset( $response['error_followups'] ) && true === $response['error_followups'];
 		$state['errors_supported'] = isset( $response['error_reports'] ) && true === $response['error_reports'];
 		$state['error_details_supported'] = isset( $response['error_details'] ) && true === $response['error_details'];
 		$state['error_context_supported'] = isset( $response['error_context'] ) && true === $response['error_context'];

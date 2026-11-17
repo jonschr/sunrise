@@ -156,7 +156,7 @@ register_shutdown_function( function () {
 } );
 
 /** Separate, coalesced delivery after normal synchronization; no job or report sequence is changed. */
-function agent_report_errors() {
+function agent_report_errors( $force_followup = false ) {
 	$state = agent_state();
 	$groups = array_values( error_summaries() );
 	if ( ! error_reporting_enabled( $state ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) ) { return true; }
@@ -168,9 +168,11 @@ function agent_report_errors() {
 		}
 		if ( empty( $state['error_details_supported'] ) ) { unset( $group['details'] ); }
 	} unset( $group );
-	$hash = hash( 'sha256', wp_json_encode( array( $state['site_id'], $groups ) ) );
+	$signature = array( $state['site_id'], $groups );
+	if ( ! empty( $state['error_followups_supported'] ) ) { $signature[] = 'followup'; }
+	$hash = hash( 'sha256', wp_json_encode( $signature ) );
 	$key = 'sunrise_error_ack_' . get_current_user_id();
-	if ( get_option( $key ) === $hash ) { return true; }
+	if ( get_option( $key ) === $hash && ! ( $force_followup && ! empty( $state['error_followups_supported'] ) ) ) { return true; }
 	// Bound delivery independently of the 100-group local retention limit.
 	$batches = array(); $batch = array(); $bytes = 0;
 	foreach ( $groups as $group ) {
@@ -180,7 +182,9 @@ function agent_report_errors() {
 	}
 	if ( $batch ) { $batches[] = $batch; }
 	foreach ( $batches as $batch ) {
-		$result = agent_http( 'agent/errors', array( 'groups' => $batch ), $state );
+		$payload = array( 'groups' => $batch );
+		if ( ! empty( $state['error_followups_supported'] ) ) { $payload['checked_at'] = time(); }
+		$result = agent_http( 'agent/errors', $payload, $state );
 		if ( is_wp_error( $result ) || ! isset( $result['accepted'] ) || true !== $result['accepted'] ) { return is_wp_error( $result ) ? $result : new \WP_Error( 'sunrise_errors_receipt', 'Invalid diagnostic receipt.' ); }
 	}
 	update_option( $key, $hash, false ); return true;
@@ -188,10 +192,18 @@ function agent_report_errors() {
 
 /** Coalesce diagnostic-only follow-ups; fatal shutdown never performs network I/O. */
 function error_queue_report( $delay = 30 ) {
- if ( ! wp_next_scheduled( 'sunrise_error_report' ) ) { wp_schedule_single_event( max( time() + max( 30, (int) $delay ), (int) get_option( 'sunrise_error_report_retry_at', 0 ) ), 'sunrise_error_report' ); }
+ $retry = (int) get_option( 'sunrise_error_report_retry_at', 0 );
+ $at = max( time() + max( 30, (int) $delay ), $retry );
+ $pending = wp_next_scheduled( 'sunrise_error_report' );
+ if ( ! $pending || $at < $pending || $pending < $retry ) {
+  if ( $pending ) { wp_unschedule_event( $pending, 'sunrise_error_report' ); }
+  wp_schedule_single_event( $at, 'sunrise_error_report' );
+ }
 }
 
 function error_report_followup() {
+ $retry = (int) get_option( 'sunrise_error_report_retry_at', 0 );
+ if ( $retry > time() ) { error_queue_report( $retry - time() ); return; }
  $recent = array_filter( error_summaries(), function ( $group ) { return $group['last_at'] >= time() - 15 * MINUTE_IN_SECONDS; } );
  if ( ! $recent || ! error_capture_enabled() ) { return; }
  $previous = get_current_user_id();
@@ -202,7 +214,7 @@ function error_report_followup() {
   foreach ( agent_states() as $user_id => $state ) {
    if ( ! error_reporting_enabled( $state ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) { continue; }
    wp_set_current_user( (int) $user_id );
-   $result = agent_report_errors();
+   $result = agent_report_errors( true );
    if ( is_wp_error( $result ) ) {
     $data = $result->get_error_data();
     $wait = is_array( $data ) ? max( 60, (int) ( $data['retry_after'] ?? 60 ) ) : 60;
@@ -211,6 +223,9 @@ function error_report_followup() {
    }
   }
   delete_option( 'sunrise_error_report_retry_at' );
+  foreach ( $recent as $group ) {
+   if ( 1 === $group['count'] && $group['last_at'] + 330 > time() ) { error_queue_report( $group['last_at'] + 330 - time() ); }
+  }
  } finally { wp_set_current_user( $previous );\WP_Upgrader::release_lock( 'sunrise_agent' ); }
 }
 add_action( 'sunrise_error_report', __NAMESPACE__ . '\\error_report_followup' );

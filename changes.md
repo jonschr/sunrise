@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.40 — 2026-11-17
+
+- Complete a negotiated diagnostic follow-up after five minutes even when a single captured fatal does not repeat. Send the checked snapshot time separately from occurrence times; retain legacy coalescing, opt-outs, locks and provider backoff.
+
 ## 0.3.39 — 2026-11-17
 
 - Coalesce a diagnostic-only upload shortly after a captured PHP fatal so Control can distinguish repeated errors from brief update-time failures. Respect connection locks, opt-outs and retry backoff; never send HTTP during fatal shutdown or execute update jobs in this follow-up. Working WP-Cron is required.

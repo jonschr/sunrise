@@ -1,8 +1,8 @@
 {
   "name": "Sunrise",
-  "version": "0.3.39",
+  "version": "0.3.40",
   "homepage": "https://github.com/jonschr/sunrise",
-  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.39/sunrise.zip",
+  "download_url": "https://github.com/jonschr/sunrise/releases/download/v0.3.40/sunrise.zip",
   "requires": "6.6",
   "requires_php": "7.4",
   "icons": {
@@ -10,6 +10,6 @@
   },
   "sections": {
     "description": "Authenticated site update management and monitoring.",
-    "changelog": "<h4>0.3.39</h4><ul><li>Report new PHP fatal diagnostics through a short, coalesced diagnostic-only WP-Cron follow-up.</li><li>Help Control distinguish continuing errors from transient update-time bursts while preserving locks, opt-outs, retry backoff and normal update behavior.</li></ul>"
+    "changelog": "<h4>0.3.40</h4><ul><li>Complete a negotiated five-minute follow-up for a single captured PHP fatal even when it does not recur.</li><li>Distinguish completed diagnostic follow-ups from unknown recurrence while preserving older Control compatibility, opt-outs, locks and provider retry backoff.</li></ul>"
   }
 }
