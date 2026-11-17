@@ -11,6 +11,7 @@ function trailingslashit( $path ) { return rtrim( $path, '/\\' ) . '/'; }
 function get_theme_root() { return '/fixture-wordpress/wp-content/themes'; }
 function wp_check_invalid_utf8( $value, $strip = false ) { return preg_match( '//u', $value ) ? $value : ''; }
 function add_filter() {}
+function add_action() {}
 require dirname( __DIR__ ) . '/includes/errors.php';
 function check( $condition, $label ) { if ( ! $condition ) { throw new \RuntimeException( $label ); } }
 function sunrise_trace_fixture( $argument ) { sunrise_undefined_fixture_function( $argument ); }

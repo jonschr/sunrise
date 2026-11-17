@@ -142,6 +142,7 @@ function capture_error_summary( $error ) {
 	} catch ( \Throwable $failure ) { /* Keep the baseline report if context collection fails. */ }
 	uasort( $groups, function ( $a, $b ) { return $b['last_at'] <=> $a['last_at']; } );
 	update_option( 'sunrise_error_groups', array_slice( $groups, 0, 100, true ), false );
+	error_queue_report();
 }
 
 // Native recovery (and WP-CLI's wp_die handler) may exit before later shutdown callbacks.
@@ -184,3 +185,32 @@ function agent_report_errors() {
 	}
 	update_option( $key, $hash, false ); return true;
 }
+
+/** Coalesce diagnostic-only follow-ups; fatal shutdown never performs network I/O. */
+function error_queue_report( $delay = 30 ) {
+ if ( ! wp_next_scheduled( 'sunrise_error_report' ) ) { wp_schedule_single_event( max( time() + max( 30, (int) $delay ), (int) get_option( 'sunrise_error_report_retry_at', 0 ) ), 'sunrise_error_report' ); }
+}
+
+function error_report_followup() {
+ $recent = array_filter( error_summaries(), function ( $group ) { return $group['last_at'] >= time() - 15 * MINUTE_IN_SECONDS; } );
+ if ( ! $recent || ! error_capture_enabled() ) { return; }
+ $previous = get_current_user_id();
+ require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+ if ( ! agent_connection_lock() ) { error_queue_report( 60 ); return; }
+ try {
+  if ( is_wp_error( installation_guard() ) ) { return; }
+  foreach ( agent_states() as $user_id => $state ) {
+   if ( ! error_reporting_enabled( $state ) || empty( $state['errors_supported'] ) || ! agent_owner_valid( $state ) || ! empty( $state['revoked'] ) || ! agent_service_matches( $state ) ) { continue; }
+   wp_set_current_user( (int) $user_id );
+   $result = agent_report_errors();
+   if ( is_wp_error( $result ) ) {
+    $data = $result->get_error_data();
+    $wait = is_array( $data ) ? max( 60, (int) ( $data['retry_after'] ?? 60 ) ) : 60;
+    update_option( 'sunrise_error_report_retry_at', time() + $wait, false );
+    error_queue_report( $wait );return;
+   }
+  }
+  delete_option( 'sunrise_error_report_retry_at' );
+ } finally { wp_set_current_user( $previous );\WP_Upgrader::release_lock( 'sunrise_agent' ); }
+}
+add_action( 'sunrise_error_report', __NAMESPACE__ . '\\error_report_followup' );

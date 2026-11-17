@@ -3,7 +3,7 @@
 namespace Sunrise { function agent_states() { return array(); } }
 namespace {
 define('ABSPATH','/fixture/');define('WP_PLUGIN_DIR','/fixture/wp-content/plugins');define('WPMU_PLUGIN_DIR','/fixture/wp-content/mu-plugins');define('WP_CONTENT_DIR','/fixture/wp-content');
-function wp_normalize_path($value){return str_replace('\\','/',$value);}function trailingslashit($value){return rtrim($value,'/').'/';}function get_theme_root(){return '/fixture/wp-content/themes';}function wp_check_invalid_utf8($value){return $value;}function wp_json_encode($value){return json_encode($value);}function add_filter(){}function is_admin(){return false;}
+function wp_normalize_path($value){return str_replace('\\','/',$value);}function trailingslashit($value){return rtrim($value,'/').'/';}function get_theme_root(){return '/fixture/wp-content/themes';}function wp_check_invalid_utf8($value){return $value;}function wp_json_encode($value){return json_encode($value);}function add_filter(){}function add_action(){}function is_admin(){return false;}
 class WP_Block_Supports {public static $block_to_render=array('blockName'=>'core/tab-list');}
 class WP_Block_Type_Registry {static function get_instance(){return new self();}function get_registered($name){return (object)array('render_callback'=>'context_fixture_callback');}}
 function context_fixture_callback($private_argument=null){}

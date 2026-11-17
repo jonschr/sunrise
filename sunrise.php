@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Sunrise
  * Description: Authenticated site update management and monitoring.
- * Version: 0.3.38
+ * Version: 0.3.39
  * Plugin URI: https://github.com/jonschr/sunrise
  * Update URI: https://github.com/jonschr/sunrise
  * Requires at least: 6.6
@@ -16,7 +16,7 @@ namespace Sunrise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '0.3.38';
+const VERSION = '0.3.39';
 
 // Discard old cached WordPress.org collisions before the release checker adds its verified source.
 add_filter( 'site_transient_update_plugins', function ( $updates ) {
@@ -75,6 +75,8 @@ register_deactivation_hook( __FILE__, function () {
 	delete_option( 'sunrise_agent_interval' );
 	wp_unschedule_hook( 'sunrise_check_in' );
 	wp_unschedule_hook( 'sunrise_wake_check_in' );
+	wp_clear_scheduled_hook( 'sunrise_error_report' );
+	delete_option( 'sunrise_error_report_retry_at' );
 	foreach ( get_option( 'sunrise_job_ids', array() ) as $id ) {
 		wp_clear_scheduled_hook( 'sunrise_run_job', array( $id ) );
 		$job = get_option( 'sunrise_job_' . $id );

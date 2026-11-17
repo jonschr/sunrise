@@ -4,6 +4,10 @@ Release history starts with 0.2.0. Earlier development commits are not backfille
 
 ## Unreleased
 
+## 0.3.39 — 2026-11-17
+
+- Coalesce a diagnostic-only upload shortly after a captured PHP fatal so Control can distinguish repeated errors from brief update-time failures. Respect connection locks, opt-outs and retry backoff; never send HTTP during fatal shutdown or execute update jobs in this follow-up. Working WP-Cron is required.
+
 ## 0.3.38 — 2026-10-30
 
 - Share bounded plugin changelogs from installed native update providers after Control negotiation, including Plugin Update Checker JSON and repository Markdown notes. Cache lookups, rotate through offers, and retain normal update behavior.
